@@ -3,7 +3,6 @@ use nom::bytes::complete::*;
 use nom::character::complete::*;
 use nom::combinator::map;
 use nom::error::ErrorKind;
-use nom::number::complete::be_u16;
 use nom::sequence::terminated;
 use nom::Err;
 use nom::IResult;
@@ -93,6 +92,36 @@ fn parse_line(input: &str) -> IResult<&str, Line> {
     Ok((i, result))
 }
 
+fn parse_containment(input: &str) -> IResult<&str, Containment> {
+    let tab = tag("\t");
+    let (i, _line_type) = terminated(tag("C"), &tab)(input)?;
+
+    let seg = terminated(parse_name, &tab);
+    let orient = terminated(parse_orient, &tab);
+
+    let (i, container_name) = seg(i)?;
+    let (i, container_orient) = orient(i)?;
+    let (i, contained_name) = seg(i)?;
+    let (i, contained_orient) = orient(i)?;
+    let (i, pos) = terminated(digit0, &tab)(i)?;
+
+    let (i, overlap) = terminated(parse_overlap, &tab)(i)?;
+
+    let result = Containment {
+        container_name,
+        container_orient,
+        contained_name,
+        contained_orient,
+        overlap,
+        pos: pos.parse::<usize>().unwrap(),
+        read_coverage: None,
+        num_mismatches: None,
+        edge_id: None,
+    };
+
+    Ok((i, result))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +173,34 @@ mod tests {
             Ok((res, l)) => {
                 println!("{:?}", l);
                 assert_eq!(l, line_)
+            }
+        }
+    }
+
+    #[test]
+    fn can_parse_containment() {
+        let cont = "C\t1\t-\t2\t+\t110\t100M	";
+
+        let cont_ = Containment {
+            container_name: "1".to_string(),
+            container_orient: Orientation::Backward,
+            contained_name: "2".to_string(),
+            contained_orient: Orientation::Forward,
+            overlap: "100M".to_string(),
+            pos: 110,
+            read_coverage: None,
+            num_mismatches: None,
+            edge_id: None,
+        };
+
+        match parse_containment(cont) {
+            Err(err) => {
+                println!("{:?}", err);
+                assert_eq!(true, false)
+            }
+            Ok((res, c)) => {
+                println!("{:?}", c);
+                assert_eq!(c, cont_)
             }
         }
     }

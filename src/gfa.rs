@@ -35,7 +35,7 @@ pub struct Containment {
     pub container_orient: Orientation,
     pub contained_name: String,
     pub contained_orient: Orientation,
-    pub pos: usize,
+    pub pos: u64,
     pub overlap: String,
     pub read_coverage: Option<i64>,
     pub num_mismatches: Option<i64>,
