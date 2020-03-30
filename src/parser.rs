@@ -3,6 +3,7 @@ use nom::bytes::complete::*;
 use nom::character::complete::*;
 use nom::combinator::map;
 use nom::error::ErrorKind;
+use nom::multi::separated_list;
 use nom::sequence::terminated;
 use nom::Err;
 use nom::IResult;
@@ -122,6 +123,24 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
     Ok((i, result))
 }
 
+fn parse_path(input: &str) -> IResult<&str, Path> {
+    let tab = tag("\t");
+
+    let (i, _line_type) = terminated(tag("P"), &tab)(input)?;
+    let (i, path_name) = terminated(parse_name, &tab)(i)?;
+    let (i, segs) = terminated(parse_name, &tab)(i)?;
+    let segment_names = segs.split_terminator(",").map(String::from).collect();
+    let (i, overlaps) = separated_list(tag(","), parse_overlap)(i)?;
+
+    let result = Path {
+        path_name,
+        segment_names,
+        overlaps,
+    };
+
+    Ok((i, result))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,6 +220,28 @@ mod tests {
             Ok((res, c)) => {
                 println!("{:?}", c);
                 assert_eq!(c, cont_)
+            }
+        }
+    }
+
+    #[test]
+    fn can_parse_path() {
+        let path = "P\t14\t11+,12-,13+\t4M,5M";
+
+        let path_ = Path {
+            path_name: "14".to_string(),
+            segment_names: vec!["11+".to_string(), "12-".to_string(), "13+".to_string()],
+            overlaps: vec!["4M".to_string(), "5M".to_string()],
+        };
+
+        match parse_path(path) {
+            Err(err) => {
+                println!("{:?}", err);
+                assert_eq!(true, false)
+            }
+            Ok((res, p)) => {
+                println!("{:?}", p);
+                assert_eq!(p, path_)
             }
         }
     }
