@@ -34,6 +34,7 @@ checksum = "b486ce3ccf7ffd79fdeb678eac06a9e6c09fc88d33836340becb8fffe87c5e33"
 name = "gfa"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "nom",
 ]
 
