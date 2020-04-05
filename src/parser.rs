@@ -7,20 +7,15 @@ use nom::multi::separated_list;
 use nom::sequence::{preceded, terminated};
 use nom::Err;
 use nom::IResult;
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::path::PathBuf;
 
 // #[macro_use]
 use nom::regex::Regex;
 
 use crate::gfa::*;
-
-fn segment_ex() -> String {
-    format!("S\t11\tACCTT\tRC:i:123")
-}
-
-lazy_static! {
-    static ref RE_ORIENT: Regex = Regex::new(r"+|-").unwrap();
-    static ref RE_OVERLAP: Regex = Regex::new(r"\*|([0-9]+[MIDNSHPX=])+").unwrap();
-}
 
 fn parse_name(input: &str) -> IResult<&str, String> {
     let (i, name) = re_find!(input, r"^[!-)+-<>-~][!-~]*")?;
@@ -163,9 +158,6 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
 }
 
 fn parse_path(input: &str) -> IResult<&str, Path> {
-    // let tab = tag("\t");
-
-    // let (i, _line_type) = terminated(tag("P"), &tab)(input)?;
     let (i, path_name) = terminated(parse_name, &tab)(input)?;
     let (i, segs) = terminated(parse_name, &tab)(i)?;
     let segment_names = segs.split_terminator(",").map(String::from).collect();
@@ -180,9 +172,9 @@ fn parse_path(input: &str) -> IResult<&str, Path> {
     Ok((i, result))
 }
 
-fn parse_line(line: &str) -> IResult<&str, Line> {
+pub fn parse_line(line: &str) -> IResult<&str, Line> {
     let (i, line_type) = terminated(one_of("HSLCP#"), tab)(line)?;
-    // println!("{} - {:?}", line_type, i);
+
     match line_type {
         'H' => {
             let (i, h) = parse_header(i)?;
@@ -207,13 +199,34 @@ fn parse_line(line: &str) -> IResult<&str, Line> {
         }
         _ => Ok((i, Line::Comment)), // ignore unrecognized headers for now
     }
+}
 
-    // Ok((
-    //     "",)
-    //     Line::Header(Header {
-    //         version: "1.0".to_string(),
-    //     }),
-    // ))
+pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
+    let file = File::open(path).expect(&format!("Error opening file {:?}", path));
+
+    let reader = BufReader::new(file);
+    let mut lines = reader.lines();
+
+    let mut gfa = GFA::new();
+
+    for line in lines {
+        let l = line.expect("Error parsing file");
+        let p = parse_line(&l);
+        println!("fuck: {:?}", p);
+
+        if let Ok((_, Line::Segment(s))) = p {
+            println!("what the fuck");
+            gfa.segments.push(s);
+        } else if let Ok((_, Line::Link(l))) = p {
+            gfa.links.push(l);
+        } else if let Ok((_, Line::Containment(c))) = p {
+            gfa.containments.push(c);
+        } else if let Ok((_, Line::Path(pt))) = p {
+            gfa.paths.push(pt);
+        }
+    }
+
+    Some(gfa)
 }
 
 #[cfg(test)]
@@ -391,5 +404,29 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
         }
 
         assert_eq!(gfa_correct, gfa);
+    }
+
+    #[test]
+    fn can_parse_gfa_file() {
+        let gfa = parse_gfa(&PathBuf::from("./lil.gfa"));
+
+        match gfa {
+            None => panic!("Error parsing GFA file"),
+            Some(g) => {
+                let num_segs = g.segments.len();
+                let num_links = g.links.len();
+                let num_paths = g.paths.len();
+                let num_conts = g.containments.len();
+                println!("number of segments: {}", num_segs);
+                println!("number of links: {}", num_links);
+                println!("number of containments: {}", num_conts);
+                println!("number of paths: {}", num_paths);
+
+                assert_eq!(num_segs, 15);
+                assert_eq!(num_links, 20);
+                assert_eq!(num_conts, 0);
+                assert_eq!(num_paths, 3);
+            }
+        }
     }
 }
