@@ -2,18 +2,13 @@ use nom::branch::alt;
 use nom::bytes::complete::*;
 use nom::character::complete::*;
 use nom::combinator::map;
-use nom::error::ErrorKind;
 use nom::multi::separated_list;
-use nom::sequence::{preceded, terminated};
-use nom::Err;
+use nom::sequence::terminated;
 use nom::IResult;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::PathBuf;
-
-// #[macro_use]
-use nom::regex::Regex;
 
 use crate::gfa::*;
 
@@ -94,7 +89,7 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
         uri: None,
     };
 
-    Ok((input, result))
+    Ok((i, result))
 }
 
 fn parse_link(input: &str) -> IResult<&str, Link> {
@@ -205,7 +200,7 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
     let file = File::open(path).expect(&format!("Error opening file {:?}", path));
 
     let reader = BufReader::new(file);
-    let mut lines = reader.lines();
+    let lines = reader.lines();
 
     let mut gfa = GFA::new();
 
