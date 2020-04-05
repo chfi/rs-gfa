@@ -1,4 +1,27 @@
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Header {
+    pub version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum OptionalFieldValue {
+    PrintableChar(char),
+    SignedInt(i64),
+    Float(f32),
+    PrintableString(String),
+    JSON(String),
+    ByteArray(Vec<u8>),
+    IntArray(Vec<i32>),
+    FloatArray(Vec<f32>),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct OptionalField {
+    pub tag: String,
+    pub content: OptionalFieldValue,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Segment {
     pub name: String,
     pub sequence: String,
@@ -15,7 +38,7 @@ pub enum Orientation {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct Line {
+pub struct Link {
     pub from_segment: String,
     pub from_orient: Orientation,
     pub to_segment: String,

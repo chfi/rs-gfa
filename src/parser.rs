@@ -4,7 +4,7 @@ use nom::character::complete::*;
 use nom::combinator::map;
 use nom::error::ErrorKind;
 use nom::multi::separated_list;
-use nom::sequence::terminated;
+use nom::sequence::{preceded, terminated};
 use nom::Err;
 use nom::IResult;
 
@@ -27,6 +27,21 @@ fn parse_name(input: &str) -> IResult<&str, String> {
     Ok((i, name.to_string()))
 }
 
+fn parse_header(input: &str) -> IResult<&str, Header> {
+    let col = tag(":");
+    let (i, _line_type) = terminated(tag("H"), tag("\t"))(input)?;
+    let (i, _opt_tag) = terminated(tag("VN"), &col)(i)?;
+    let (i, _opt_type) = terminated(tag("Z"), &col)(i)?;
+    let (i, version) = re_find!(i, r"[ !-~]+")?;
+
+    Ok((
+        i,
+        Header {
+            version: version.to_string(),
+        },
+    ))
+}
+
 fn parse_sequence(input: &str) -> IResult<&str, String> {
     let (i, seq) = re_find!(input, r"\*|[A-Za-z=.]+")?;
     Ok((i, seq.to_string()))
@@ -43,6 +58,28 @@ fn parse_overlap(input: &str) -> IResult<&str, String> {
     Ok((i, overlap.to_string()))
 }
 
+/*
+fn parse_optional(input: &str) -> IResult<&str, OptionalField> {
+    let col = tag(":");
+    let (i, opt_tag) = re_find!(input, r"^[A-Za-Z][A-Za-z0-9]")?;
+    let (i, opt_type) = preceded(col, one_of("AifZJHB"))(i)?;
+
+    let (i, opt_val) = match opt_type {
+        'A' => ,
+        'i' => true,
+        'f' => true,
+        'Z' => true,
+        'J' => true,
+        'H' => true,
+        'B' => true,
+    }
+
+    // let (i, opt_typ) = terminated(one_of("AifZJHB"), col);
+    // let (i, opt_tag) = re_find!(input, r"[A-Za-Z][A-Za-z0-9]")?;
+    // let (
+}
+*/
+
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
     let tab = tag("\t");
     let (input, _line_type) = terminated(tag("S"), &tab)(input)?;
@@ -50,6 +87,8 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
     let (input, name) = terminated(parse_name, &tab)(input)?;
 
     let (input, seq) = terminated(parse_sequence, &tab)(input)?;
+
+    // TODO branch on the length of the remaining input to read the rest
 
     let result = Segment {
         name: name,
@@ -63,7 +102,7 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
     Ok((input, result))
 }
 
-fn parse_line(input: &str) -> IResult<&str, Line> {
+fn parse_link(input: &str) -> IResult<&str, Link> {
     let tab = tag("\t");
     let (i, _line_type) = terminated(tag("L"), &tab)(input)?;
 
@@ -76,7 +115,7 @@ fn parse_line(input: &str) -> IResult<&str, Line> {
     let (i, to_orient) = orient(i)?;
     let (i, overlap) = terminated(parse_overlap, &tab)(i)?;
 
-    let result = Line {
+    let result = Link {
         from_segment,
         from_orient,
         to_segment,
@@ -146,6 +185,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn can_parse_header() {
+        let hdr = "H\tVN:Z:1.0";
+        let hdr_ = Header {
+            version: "1.0".to_string(),
+        };
+
+        match parse_header(hdr) {
+            Err(err) => {
+                println!("{:?}", err);
+                assert_eq!(true, false)
+            }
+            Ok((res, h)) => {
+                println!("{:?}", h);
+                assert_eq!(h, hdr_)
+            }
+        }
+    }
+
+    #[test]
     fn can_parse_segment() {
         let seg = "S	11	ACCTT	";
         let seg_ = Segment {
@@ -169,9 +227,9 @@ mod tests {
     }
 
     #[test]
-    fn can_parse_line() {
-        let line = "L	11	+	12	-	4M	";
-        let line_ = Line {
+    fn can_parse_link() {
+        let link = "L	11	+	12	-	4M	";
+        let link_ = Link {
             from_segment: "11".to_string(),
             from_orient: Orientation::Forward,
             to_segment: "12".to_string(),
@@ -184,14 +242,14 @@ mod tests {
             kmer_count: None,
             edge_id: None,
         };
-        match parse_line(line) {
+        match parse_link(link) {
             Err(err) => {
                 println!("{:?}", err);
                 assert_eq!(true, false)
             }
             Ok((res, l)) => {
                 println!("{:?}", l);
-                assert_eq!(l, line_)
+                assert_eq!(l, link_)
             }
         }
     }
