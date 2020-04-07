@@ -207,10 +207,8 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
     for line in lines {
         let l = line.expect("Error parsing file");
         let p = parse_line(&l);
-        println!("fuck: {:?}", p);
 
         if let Ok((_, Line::Segment(s))) = p {
-            println!("what the fuck");
             gfa.segments.push(s);
         } else if let Ok((_, Line::Link(l))) = p {
             gfa.links.push(l);
@@ -237,13 +235,9 @@ mod tests {
 
         match parse_header(hdr) {
             Err(err) => {
-                println!("{:?}", err);
-                assert_eq!(true, false)
+                panic!(&format!("{:?}", err));
             }
-            Ok((res, h)) => {
-                println!("{:?}", h);
-                assert_eq!(h, hdr_)
-            }
+            Ok((res, h)) => assert_eq!(h, hdr_),
         }
     }
 
@@ -260,13 +254,9 @@ mod tests {
         };
         match parse_segment(seg) {
             Err(err) => {
-                println!("{:?}", err);
-                assert_eq!(true, false)
+                panic!(&format!("{:?}", err));
             }
-            Ok((res, s)) => {
-                println!("{:?}", s);
-                assert_eq!(s, seg_)
-            }
+            Ok((res, s)) => assert_eq!(s, seg_),
         }
     }
 
@@ -288,13 +278,9 @@ mod tests {
         };
         match parse_link(link) {
             Err(err) => {
-                println!("{:?}", err);
-                assert_eq!(true, false)
+                panic!(&format!("{:?}", err));
             }
-            Ok((res, l)) => {
-                println!("{:?}", l);
-                assert_eq!(l, link_)
-            }
+            Ok((res, l)) => assert_eq!(l, link_),
         }
     }
 
@@ -316,13 +302,9 @@ mod tests {
 
         match parse_containment(cont) {
             Err(err) => {
-                println!("{:?}", err);
-                assert_eq!(true, false)
+                panic!(&format!("{:?}", err));
             }
-            Ok((res, c)) => {
-                println!("{:?}", c);
-                assert_eq!(c, cont_)
-            }
+            Ok((res, c)) => assert_eq!(c, cont_),
         }
     }
 
@@ -338,13 +320,9 @@ mod tests {
 
         match parse_path(path) {
             Err(err) => {
-                println!("{:?}", err);
-                assert_eq!(true, false)
+                panic!(&format!("{:?}", err));
             }
-            Ok((res, p)) => {
-                println!("{:?}", p);
-                assert_eq!(p, path_)
-            }
+            Ok((res, p)) => assert_eq!(p, path_),
         }
     }
 
@@ -387,7 +365,6 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
 
         for l in lines {
             let p = parse_line(l);
-            println!("{:?}", p);
 
             if let Ok((_, Line::Segment(s))) = p {
                 gfa.segments.push(s);
@@ -412,10 +389,6 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
                 let num_links = g.links.len();
                 let num_paths = g.paths.len();
                 let num_conts = g.containments.len();
-                println!("number of segments: {}", num_segs);
-                println!("number of links: {}", num_links);
-                println!("number of containments: {}", num_conts);
-                println!("number of paths: {}", num_paths);
 
                 assert_eq!(num_segs, 15);
                 assert_eq!(num_links, 20);

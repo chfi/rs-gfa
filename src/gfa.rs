@@ -44,10 +44,19 @@ impl Segment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Orientation {
     Forward,
     Backward,
+}
+
+impl Orientation {
+    pub fn as_bool(&self) -> bool {
+        match self {
+            Self::Forward => true,
+            Self::Backward => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
