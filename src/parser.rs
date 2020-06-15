@@ -232,9 +232,9 @@ mod tests {
 
         match parse_header(hdr) {
             Err(err) => {
-                panic!(&format!("{:?}", err));
+                panic!(format!("{:?}", err));
             }
-            Ok((res, h)) => assert_eq!(h, hdr_),
+            Ok((_res, h)) => assert_eq!(h, hdr_),
         }
     }
 
@@ -251,9 +251,9 @@ mod tests {
         };
         match parse_segment(seg) {
             Err(err) => {
-                panic!(&format!("{:?}", err));
+                panic!(format!("{:?}", err));
             }
-            Ok((res, s)) => assert_eq!(s, seg_),
+            Ok((_res, s)) => assert_eq!(s, seg_),
         }
     }
 
@@ -275,9 +275,9 @@ mod tests {
         };
         match parse_link(link) {
             Err(err) => {
-                panic!(&format!("{:?}", err));
+                panic!(format!("{:?}", err));
             }
-            Ok((res, l)) => assert_eq!(l, link_),
+            Ok((_res, l)) => assert_eq!(l, link_),
         }
     }
 
@@ -299,9 +299,9 @@ mod tests {
 
         match parse_containment(cont) {
             Err(err) => {
-                panic!(&format!("{:?}", err));
+                panic!(format!("{:?}", err));
             }
-            Ok((res, c)) => assert_eq!(c, cont_),
+            Ok((_res, c)) => assert_eq!(c, cont_),
         }
     }
 
@@ -311,15 +311,19 @@ mod tests {
 
         let path_ = Path {
             path_name: "14".to_string(),
-            segment_names: vec!["11+".to_string(), "12-".to_string(), "13+".to_string()],
+            segment_names: vec![
+                ("11".to_string(), Orientation::Forward),
+                ("12".to_string(), Orientation::Backward),
+                ("13".to_string(), Orientation::Forward),
+            ],
             overlaps: vec!["4M".to_string(), "5M".to_string()],
         };
 
         match parse_path(path) {
             Err(err) => {
-                panic!(&format!("{:?}", err));
+                panic!(format!("{:?}", err));
             }
-            Ok((res, p)) => assert_eq!(p, path_),
+            Ok((_res, p)) => assert_eq!(p, path_),
         }
     }
 
@@ -355,7 +359,10 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
                 vec![
                     "1+", "3+", "5+", "6+", "8+", "9+", "11+", "12+", "14+", "15+",
                 ],
-                vec!["8M", "1M", "1M", "3M", "1M", "19M", "1M", "4M", "1M", "11M"],
+                vec!["8M", "1M", "1M", "3M", "1M", "19M", "1M", "4M", "1M", "11M"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
             )],
             containments: vec![],
         };
