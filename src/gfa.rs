@@ -186,3 +186,33 @@ impl GFA {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_path() {
+        let name = "path1";
+        let seg_names = vec!["1+", "2-", "13-", "60+"];
+        let overlaps: Vec<_> = vec!["8M", "10M", "0M", "2M"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let path_expected = Path {
+            path_name: name.to_string(),
+            segment_names: vec![
+                ("1".to_string(), Orientation::Forward),
+                ("2".to_string(), Orientation::Backward),
+                ("13".to_string(), Orientation::Backward),
+                ("60".to_string(), Orientation::Forward),
+            ],
+            overlaps: overlaps.clone(),
+        };
+
+        let path = Path::new(name, seg_names, overlaps);
+
+        assert_eq!(path, path_expected);
+    }
+}
