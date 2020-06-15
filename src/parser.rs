@@ -155,14 +155,11 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
 fn parse_path(input: &str) -> IResult<&str, Path> {
     let (i, path_name) = terminated(parse_name, &tab)(input)?;
     let (i, segs) = terminated(parse_name, &tab)(i)?;
-    let segment_names = segs.split_terminator(",").map(String::from).collect();
+    let segment_names = segs.split_terminator(",").collect();
+
     let (i, overlaps) = separated_list(tag(","), parse_overlap)(i)?;
 
-    let result = Path {
-        path_name,
-        segment_names,
-        overlaps,
-    };
+    let result = Path::new(&path_name, segment_names, overlaps);
 
     Ok((i, result))
 }

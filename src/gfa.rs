@@ -57,6 +57,24 @@ impl Orientation {
             Self::Backward => false,
         }
     }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "+" => Some(Self::Forward),
+            "-" => Some(Self::Backward),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Orientation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let sym = match self {
+            Self::Forward => '+',
+            Self::Backward => '-',
+        };
+        write!(f, "{}", sym)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -114,14 +132,23 @@ pub struct Containment {
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Path {
     pub path_name: String,
-    pub segment_names: Vec<String>,
+    pub segment_names: Vec<(String, Orientation)>,
     pub overlaps: Vec<String>,
 }
 
 impl Path {
-    pub fn new(path_name: &str, seg_names: Vec<&str>, overlaps: Vec<&str>) -> Path {
-        let segment_names = seg_names.iter().map(|s| s.to_string()).collect();
-        let overlaps = overlaps.iter().map(|s| s.to_string()).collect();
+    pub fn new(path_name: &str, seg_names: Vec<&str>, overlaps: Vec<String>) -> Path {
+        let segment_names = seg_names
+            .iter()
+            .map(|s| {
+                let s: &str = s;
+                let (n, o) = s.split_at(s.len() - 1);
+                let name = n.to_string();
+                let orientation = Orientation::from_str(o).unwrap();
+                (name, orientation)
+            })
+            .collect();
+
         Path {
             path_name: path_name.to_string(),
             segment_names,
