@@ -61,6 +61,29 @@ pub fn path_string(path: &Path) -> String {
     write_path(path, &mut result);
     result
 }
+
+// Write GFA
+pub fn write_gfa<T: Write>(gfa: &GFA, stream: &mut T) {
+    write!(stream, "{}\n", header_string()).unwrap();
+    gfa.segments.iter().for_each(|s| {
+        write_segment(s, stream);
+        write!(stream, "\n").unwrap();
+    });
+
+    gfa.paths.iter().for_each(|p| {
+        write_path(p, stream);
+        write!(stream, "\n").unwrap();
+    });
+
+    gfa.links.iter().for_each(|l| {
+        write_link(l, stream);
+        write!(stream, "\n").unwrap();
+    });
+}
+
+pub fn gfa_string(gfa: &GFA) -> String {
+    let mut result = String::new();
+    write_gfa(gfa, &mut result);
     result
 }
 
