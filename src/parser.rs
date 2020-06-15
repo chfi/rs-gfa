@@ -48,31 +48,8 @@ fn parse_overlap(input: &str) -> IResult<&str, String> {
     Ok((i, overlap.to_string()))
 }
 
-/*
-fn parse_optional(input: &str) -> IResult<&str, OptionalField> {
-    let col = tag(":");
-    let (i, opt_tag) = re_find!(input, r"^[A-Za-Z][A-Za-z0-9]")?;
-    let (i, opt_type) = preceded(col, one_of("AifZJHB"))(i)?;
-
-    let (i, opt_val) = match opt_type {
-        'A' => ,
-        'i' => true,
-        'f' => true,
-        'Z' => true,
-        'J' => true,
-        'H' => true,
-        'B' => true,
-    }
-
-    // let (i, opt_typ) = terminated(one_of("AifZJHB"), col);
-    // let (i, opt_tag) = re_find!(input, r"[A-Za-Z][A-Za-z0-9]")?;
-    // let (
-}
-*/
-
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
     let tab = tag("\t");
-    // let (input, _line_type) = terminated(tag("S"), &tab)(input)?;
 
     let (i, name) = terminated(parse_name, &tab)(input)?;
 
@@ -94,7 +71,6 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
 
 fn parse_link(input: &str) -> IResult<&str, Link> {
     let tab = tag("\t");
-    // let (i, _line_type) = terminated(tag("L"), &tab)(input)?;
 
     let seg = terminated(parse_name, &tab);
     let orient = terminated(parse_orient, &tab);
@@ -124,7 +100,6 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
 
 fn parse_containment(input: &str) -> IResult<&str, Containment> {
     let tab = tag("\t");
-    // let (i, _line_type) = terminated(tag("C"), &tab)(input)?;
 
     let seg = terminated(parse_name, &tab);
     let orient = terminated(parse_orient, &tab);
