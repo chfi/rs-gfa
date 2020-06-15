@@ -125,4 +125,19 @@ mod tests {
         let string = path_string(&path);
         assert_eq!(string, "P\tpath1\t13+,51-,241+\t8M,1M,3M");
     }
+
+    use std::io::Read;
+    use std::path::PathBuf;
+
+    #[test]
+    fn print_gfa() {
+        let in_gfa = crate::parser::parse_gfa(&PathBuf::from("./lil.gfa")).unwrap();
+        let mut file = std::fs::File::open(&PathBuf::from("./lil.gfa")).unwrap();
+        let mut file_string = String::new();
+        file.read_to_string(&mut file_string).unwrap();
+
+        let string = gfa_string(&in_gfa);
+
+        assert_eq!(string, file_string);
+    }
 }
