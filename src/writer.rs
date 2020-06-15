@@ -1,41 +1,66 @@
-use crate::gfa::{Link, Orientation, Path, Segment};
+use crate::gfa::{Link, Orientation, Path, Segment, GFA};
+use std::fmt::Write;
 
 // TODO none of these functions use the optional fields yet
 
 // Write header
+pub fn header_string() -> String {
+    "H\tVN:Z:1.0".to_string()
+}
 
 // Write segment
+pub fn write_segment<T: Write>(seg: &Segment, stream: &mut T) {
+    write!(stream, "S\t{}\t{}", seg.name, seg.sequence).expect("Error writing segment to stream");
+}
+
 pub fn segment_string(seg: &Segment) -> String {
-    format!("S\t{}\t{}", seg.name, seg.sequence)
+    let mut result = String::new();
+    write_segment(seg, &mut result);
+    result
 }
 
 // Write link
-pub fn link_string(link: &Link) -> String {
-    format!(
+pub fn write_link<T: Write>(link: &Link, stream: &mut T) {
+    write!(
+        stream,
         "L\t{}\t{}\t{}\t{}\t{}",
         link.from_segment, link.from_orient, link.to_segment, link.to_orient, link.overlap
     )
+    .expect("Error writing link to stream");
+}
+
+pub fn link_string(link: &Link) -> String {
+    let mut result = String::new();
+    write_link(link, &mut result);
+    result
 }
 
 // Write path
-pub fn path_string(path: &Path) -> String {
-    let mut result = format!("P\t{}\t", path.path_name);
+pub fn write_path<T: Write>(path: &Path, stream: &mut T) {
+    write!(stream, "P\t{}\t", path.path_name).expect("Error writing path to stream");
     path.segment_names
         .iter()
         .enumerate()
         .for_each(|(i, (n, o))| {
             if i != 0 {
-                result.push_str(",");
+                write!(stream, ",").unwrap();
             }
-            result.push_str(&format!("{}{}", n, o));
+            write!(stream, "{}{}", n, o).unwrap();
         });
-    result.push_str("\t");
+    write!(stream, "\t").unwrap();
     path.overlaps.iter().enumerate().for_each(|(i, o)| {
         if i != 0 {
-            result.push_str(",");
+            write!(stream, ",").unwrap();
         }
-        result.push_str(&o);
+        write!(stream, "{}", o).unwrap();
     });
+}
+
+pub fn path_string(path: &Path) -> String {
+    let mut result = String::new();
+    write_path(path, &mut result);
+    result
+}
     result
 }
 
