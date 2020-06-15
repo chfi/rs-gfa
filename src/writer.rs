@@ -1,4 +1,4 @@
-use crate::gfa::{Link, Orientation, Path, Segment, GFA};
+use crate::gfa::{Link, Path, Segment, GFA};
 use std::fmt::Write;
 
 // TODO none of these functions use the optional fields yet
@@ -90,6 +90,7 @@ pub fn gfa_string(gfa: &GFA) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gfa::Orientation;
 
     #[test]
     fn print_segment() {
