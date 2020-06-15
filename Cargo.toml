@@ -1,10 +1,14 @@
 [package]
 name = "gfa"
 version = "0.2.0"
-authors = ["christian <christian@chfi.se>"]
+authors = ["christian@chfi.se"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "Library for working with graphs in the GFA (Graphical Fragment Assembly) format"
+repository = "https://github.com/chfi/rs-gfa"
+readme = "readme.md"
+keywords = ["bioinformatics", "parser", "graph"]
+category = "science"
 
 [dependencies]
 lazy_static = "1.4.0"
