@@ -13,7 +13,8 @@ use std::path::PathBuf;
 use crate::gfa::*;
 
 fn parse_name(input: &str) -> IResult<&str, String> {
-    let (i, name) = re_find!(input, r"^[!-)+-<>-~][!-~]*")?;
+    // let (i, name) = re_find!(input, r"^[!-)+-<>-~][!-~]*")?;
+    let (i, name) = is_not("\t")(input)?;
     Ok((i, name.to_string()))
 }
 
@@ -22,7 +23,7 @@ fn parse_header(input: &str) -> IResult<&str, Header> {
     // let (i, _line_type) = terminated(tag("H"), tag("\t"))(input)?;
     let (i, _opt_tag) = terminated(tag("VN"), &col)(input)?;
     let (i, _opt_type) = terminated(tag("Z"), &col)(i)?;
-    let (i, version) = re_find!(i, r"[ !-~]+")?;
+    let (i, version) = is_not("\n")(i)?;
 
     Ok((
         i,
@@ -33,7 +34,8 @@ fn parse_header(input: &str) -> IResult<&str, Header> {
 }
 
 fn parse_sequence(input: &str) -> IResult<&str, String> {
-    let (i, seq) = re_find!(input, r"\*|[A-Za-z=.]+")?;
+    // let (i, seq) = re_find!(input, r"\*|[A-Za-z=.]+")?;
+    let (i, seq) = is_not("\t\n")(input)?;
     Ok((i, seq.to_string()))
 }
 
@@ -44,21 +46,24 @@ fn parse_orient(input: &str) -> IResult<&str, Orientation> {
 }
 
 fn parse_overlap(input: &str) -> IResult<&str, String> {
-    let (i, overlap) = re_find!(input, r"\*|([0-9]+[MIDNSHPX=])+")?;
-    Ok((i, overlap.to_string()))
+    // let (i, overlap) = re_find!(input, r"\*|([0-9]+[MIDNSHPX=])+")?;
+    let (i, overlap) = is_not(",")(input)?;
+    let string = overlap.to_string();
+    Ok((i, string))
 }
 
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
     let tab = tag("\t");
 
-    let (i, name) = terminated(parse_name, &tab)(input)?;
+    // let (i, name) = terminated(parse_name, &tab)(input)?;
+    let (i, name) = terminated(is_not("\t"), &tab)(input)?;
 
     let (i, seq) = parse_sequence(i)?;
 
     // TODO branch on the length of the remaining input to read the rest
 
     let result = Segment {
-        name: name,
+        name: name.to_string(),
         sequence: seq,
         read_count: None,
         fragment_count: None,
@@ -110,7 +115,7 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
     let (i, contained_orient) = orient(i)?;
     let (i, pos) = terminated(digit0, &tab)(i)?;
 
-    let (i, overlap) = terminated(parse_overlap, &tab)(i)?;
+    let (i, overlap) = parse_overlap(i)?;
 
     let result = Containment {
         container_name,
@@ -129,10 +134,16 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
 
 fn parse_path(input: &str) -> IResult<&str, Path> {
     let (i, path_name) = terminated(parse_name, &tab)(input)?;
+
     let (i, segs) = terminated(parse_name, &tab)(i)?;
+
     let segment_names = segs.split_terminator(",").collect();
 
-    let (i, overlaps) = separated_list(tag(","), parse_overlap)(i)?;
+    let (i, overlaps) = is_not("\t\n")(i)?;
+    // let overlaps =
+    // let (i, overlaps) = terminated(is_not("\t"), &tab)(i)?;
+    let overlaps = overlaps.split_terminator(",").map(String::from).collect();
+    // let (i, overlaps) = separated_list(tag(","), parse_overlap)(i)?;
 
     let result = Path::new(&path_name, segment_names, overlaps);
 
@@ -248,7 +259,7 @@ mod tests {
 
     #[test]
     fn can_parse_link() {
-        let link = "11	+	12	-	4M	";
+        let link = "11	+	12	-	4M";
         let link_ = Link {
             from_segment: "11".to_string(),
             from_orient: Orientation::Forward,
@@ -272,7 +283,7 @@ mod tests {
 
     #[test]
     fn can_parse_containment() {
-        let cont = "1\t-\t2\t+\t110\t100M	";
+        let cont = "1\t-\t2\t+\t110\t100M";
 
         let cont_ = Containment {
             container_name: "1".to_string(),
