@@ -7,7 +7,7 @@ use nom::sequence::terminated;
 use nom::IResult;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::BufReader;
+use std::io::{BufReader, Lines};
 use std::path::PathBuf;
 
 use crate::gfa::*;
@@ -166,6 +166,20 @@ pub fn parse_line(line: &str) -> IResult<&str, Line> {
         }
         _ => Ok((i, Line::Comment)), // ignore unrecognized headers for now
     }
+}
+
+pub fn parse_gfa_stream<'a, B: BufRead>(
+    input: &'a mut Lines<B>,
+) -> impl Iterator<Item = Line> + 'a {
+    input.map(|l| {
+        let l = l.expect("Error parsing file");
+        let r = parse_line(&l);
+        if let Ok((_, parsed)) = r {
+            parsed
+        } else {
+            panic!("Error parsing GFA lines")
+        }
+    })
 }
 
 pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
@@ -375,5 +389,36 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
                 assert_eq!(num_paths, 3);
             }
         }
+    }
+
+    #[test]
+    fn can_stream_gfa_lines() {
+        let file = File::open(&PathBuf::from("./lil.gfa")).unwrap();
+
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
+
+        let mut gfa_lines = parse_gfa_stream(&mut lines);
+
+        assert_eq!(
+            gfa_lines.next(),
+            Some(Line::Header(Header {
+                version: "1.0".to_string()
+            }))
+        );
+
+        assert_eq!(
+            gfa_lines.next(),
+            Some(Line::Segment(Segment::new("1", "CAAATAAG")))
+        );
+        assert_eq!(
+            gfa_lines.next(),
+            Some(Line::Segment(Segment::new("2", "A")))
+        );
+
+        assert_eq!(
+            gfa_lines.next(),
+            Some(Line::Segment(Segment::new("3", "G")))
+        );
     }
 }

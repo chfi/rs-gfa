@@ -1,6 +1,6 @@
 [package]
 name = "gfa"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["christian@chfi.se"]
 edition = "2018"
 license = "MIT"
@@ -8,7 +8,7 @@ description = "Library for working with graphs in the GFA (Graphical Fragment As
 repository = "https://github.com/chfi/rs-gfa"
 readme = "readme.md"
 keywords = ["bioinformatics", "parser", "graph"]
-category = "science"
+categories = ["science"]
 
 [dependencies]
 lazy_static = "1.4.0"
