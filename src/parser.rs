@@ -18,9 +18,15 @@ fn parse_name(input: &str) -> IResult<&str, String> {
     Ok((i, name.to_string()))
 }
 
+fn parse_header_(input: &[&str]) -> Option<Header> {
+    let opt: Vec<_> = input[1].split_terminator(":").collect();
+    Some(Header {
+        version: opt[2].to_string(),
+    })
+}
+
 fn parse_header(input: &str) -> IResult<&str, Header> {
     let col = tag(":");
-    // let (i, _line_type) = terminated(tag("H"), tag("\t"))(input)?;
     let (i, _opt_tag) = terminated(tag("VN"), &col)(input)?;
     let (i, _opt_type) = terminated(tag("Z"), &col)(i)?;
     let (i, version) = is_not("\n")(i)?;
@@ -31,12 +37,6 @@ fn parse_header(input: &str) -> IResult<&str, Header> {
             version: version.to_string(),
         },
     ))
-}
-
-fn parse_sequence(input: &str) -> IResult<&str, String> {
-    // let (i, seq) = re_find!(input, r"\*|[A-Za-z=.]+")?;
-    let (i, seq) = is_not("\t\n")(input)?;
-    Ok((i, seq.to_string()))
 }
 
 fn parse_orient(input: &str) -> IResult<&str, Orientation> {
@@ -53,38 +53,35 @@ fn parse_overlap(input: &str) -> IResult<&str, String> {
 }
 
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
-    let tab = tag("\t");
+    let fields: Vec<_> = input.split_terminator("\t").collect();
 
-    // let (i, name) = terminated(parse_name, &tab)(input)?;
-    let (i, name) = terminated(is_not("\t"), &tab)(input)?;
-
-    let (i, seq) = parse_sequence(i)?;
-
-    // TODO branch on the length of the remaining input to read the rest
+    let name = fields[0].to_string();
+    let sequence = fields[1].to_string();
 
     let result = Segment {
-        name: name.to_string(),
-        sequence: seq,
+        name,
+        sequence,
         read_count: None,
         fragment_count: None,
         kmer_count: None,
         uri: None,
     };
 
-    Ok((i, result))
+    Ok((input, result))
 }
 
 fn parse_link(input: &str) -> IResult<&str, Link> {
+    let fields: Vec<_> = input.split_terminator("\t").collect();
     let tab = tag("\t");
 
     let seg = terminated(parse_name, &tab);
     let orient = terminated(parse_orient, &tab);
 
-    let (i, from_segment) = seg(input)?;
-    let (i, from_orient) = orient(i)?;
-    let (i, to_segment) = seg(i)?;
-    let (i, to_orient) = orient(i)?;
-    let (i, overlap) = parse_overlap(i)?;
+    let (_, from_segment) = parse_name(fields[0])?;
+    let (_, from_orient) = parse_orient(fields[1])?;
+    let (_, to_segment) = parse_name(fields[2])?;
+    let (_, to_orient) = parse_orient(fields[3])?;
+    let (_, overlap) = parse_overlap(fields[4])?;
 
     let result = Link {
         from_segment,
@@ -100,22 +97,19 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
         edge_id: None,
     };
 
-    Ok((i, result))
+    Ok((input, result))
 }
 
 fn parse_containment(input: &str) -> IResult<&str, Containment> {
-    let tab = tag("\t");
+    let fields: Vec<_> = input.split_terminator("\t").collect();
 
-    let seg = terminated(parse_name, &tab);
-    let orient = terminated(parse_orient, &tab);
+    let (_, container_name) = parse_name(fields[0])?;
+    let (_, container_orient) = parse_orient(fields[1])?;
+    let (_, contained_name) = parse_name(fields[2])?;
+    let (_, contained_orient) = parse_orient(fields[3])?;
+    let pos = fields[4];
 
-    let (i, container_name) = seg(input)?;
-    let (i, container_orient) = orient(i)?;
-    let (i, contained_name) = seg(i)?;
-    let (i, contained_orient) = orient(i)?;
-    let (i, pos) = terminated(digit0, &tab)(i)?;
-
-    let (i, overlap) = parse_overlap(i)?;
+    let (_, overlap) = parse_overlap(fields[5])?;
 
     let result = Containment {
         container_name,
@@ -129,10 +123,14 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
         edge_id: None,
     };
 
-    Ok((i, result))
+    Ok((input, result))
 }
 
 fn parse_path(input: &str) -> IResult<&str, Path> {
+    let fields: Vec<_> = input.split_terminator("\t").collect();
+
+    // let (_, path_name) = parse_name(fields[0])?;
+
     let (i, path_name) = terminated(parse_name, &tab)(input)?;
 
     let (i, segs) = terminated(parse_name, &tab)(i)?;
@@ -140,10 +138,7 @@ fn parse_path(input: &str) -> IResult<&str, Path> {
     let segment_names = segs.split_terminator(",").collect();
 
     let (i, overlaps) = is_not("\t\n")(i)?;
-    // let overlaps =
-    // let (i, overlaps) = terminated(is_not("\t"), &tab)(i)?;
     let overlaps = overlaps.split_terminator(",").map(String::from).collect();
-    // let (i, overlaps) = separated_list(tag(","), parse_overlap)(i)?;
 
     let result = Path::new(&path_name, segment_names, overlaps);
 
