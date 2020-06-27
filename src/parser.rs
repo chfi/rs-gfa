@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use crate::gfa::*;
 
 fn parse_header(input: &str) -> IResult<&str, Header> {
-    let opt: Vec<_> = input.split_terminator(":").collect();
+    let opt: Vec<_> = input.split_terminator(':').collect();
 
     let version = opt[2].to_string();
 
@@ -21,12 +21,7 @@ fn parse_header(input: &str) -> IResult<&str, Header> {
     // let (i, _opt_type) = terminated(tag("Z"), &col)(i)?;
     // let (i, version) = is_not("\n")(i)?;
 
-    Ok((
-        input,
-        Header {
-            version: version.to_string(),
-        },
-    ))
+    Ok((input, Header { version }))
 }
 
 fn parse_orient(input: &str) -> IResult<&str, Orientation> {
@@ -36,7 +31,7 @@ fn parse_orient(input: &str) -> IResult<&str, Orientation> {
 }
 
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
-    let fields: Vec<_> = input.split_terminator("\t").collect();
+    let fields: Vec<_> = input.split_terminator('\t').collect();
 
     let name = fields[0].to_string();
     let sequence = fields[1].to_string();
@@ -54,7 +49,7 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
 }
 
 fn parse_link(input: &str) -> IResult<&str, Link> {
-    let fields: Vec<_> = input.split_terminator("\t").collect();
+    let fields: Vec<_> = input.split_terminator('\t').collect();
 
     let from_segment = fields[0].to_string();
     let (_, from_orient) = parse_orient(fields[1])?;
@@ -80,7 +75,7 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
 }
 
 fn parse_containment(input: &str) -> IResult<&str, Containment> {
-    let fields: Vec<_> = input.split_terminator("\t").collect();
+    let fields: Vec<_> = input.split_terminator('\t').collect();
 
     let container_name = fields[0].to_string();
     let (_, container_orient) = parse_orient(fields[1])?;
@@ -106,12 +101,12 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
 }
 
 fn parse_path(input: &str) -> IResult<&str, Path> {
-    let fields: Vec<_> = input.split_terminator("\t").collect();
+    let fields: Vec<_> = input.split_terminator('\t').collect();
 
     let path_name = fields[0].to_string();
 
-    let segment_names = fields[1].split_terminator(",").collect();
-    let overlaps = fields[2].split_terminator(",").map(String::from).collect();
+    let segment_names = fields[1].split_terminator(',').collect();
+    let overlaps = fields[2].split_terminator(',').map(String::from).collect();
 
     let result = Path::new(&path_name, segment_names, overlaps);
 
@@ -162,7 +157,7 @@ pub fn parse_gfa_stream<'a, B: BufRead>(
 }
 
 pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
-    let file = File::open(path).expect(&format!("Error opening file {:?}", path));
+    let file = File::open(path).unwrap_or_else(|_| panic!("Error opening file {:?}", path));
 
     let reader = BufReader::new(file);
     let lines = reader.lines();

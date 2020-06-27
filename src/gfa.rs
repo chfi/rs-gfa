@@ -106,9 +106,9 @@ impl Link {
     ) -> Link {
         Link {
             from_segment: from_segment.to_string(),
-            from_orient: from_orient,
+            from_orient,
             to_segment: to_segment.to_string(),
-            to_orient: to_orient,
+            to_orient,
             overlap: overlap.to_string(),
             map_quality: None,
             num_mismatches: None,
