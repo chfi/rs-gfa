@@ -172,7 +172,7 @@ pub enum Line {
 }
 
 // struct to hold the results of parsing a file; not actually a graph
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct GFA {
     pub segments: Vec<Segment>,
     pub links: Vec<Link>,
@@ -182,12 +182,7 @@ pub struct GFA {
 
 impl GFA {
     pub fn new() -> Self {
-        GFA {
-            segments: vec![],
-            links: vec![],
-            containments: vec![],
-            paths: vec![],
-        }
+        Default::default()
     }
 }
 
