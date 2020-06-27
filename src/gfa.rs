@@ -50,19 +50,23 @@ pub enum Orientation {
     Backward,
 }
 
+impl std::str::FromStr for Orientation {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "+" => Ok(Self::Forward),
+            "-" => Ok(Self::Backward),
+            _ => Err("Could not parse orientation (was not + or -)"),
+        }
+    }
+}
+
 impl Orientation {
     pub fn as_bool(&self) -> bool {
         match self {
             Self::Forward => true,
             Self::Backward => false,
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "+" => Some(Self::Forward),
-            "-" => Some(Self::Backward),
-            _ => None,
         }
     }
 }
@@ -144,7 +148,7 @@ impl Path {
                 let s: &str = s;
                 let (n, o) = s.split_at(s.len() - 1);
                 let name = n.to_string();
-                let orientation = Orientation::from_str(o).unwrap();
+                let orientation = o.parse().unwrap();
                 (name, orientation)
             })
             .collect();
