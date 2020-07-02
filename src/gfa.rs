@@ -10,8 +10,8 @@ pub enum OptionalFieldValue {
     Float(f32),
     PrintableString(String),
     JSON(String),
-    ByteArray(Vec<u8>),
-    IntArray(Vec<i32>),
+    ByteArray(Vec<u32>),
+    IntArray(Vec<i64>),
     FloatArray(Vec<f32>),
 }
 

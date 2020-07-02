@@ -37,7 +37,7 @@ fn parse_optional_int(input: &str) -> Option<i64> {
     RE.find(input).and_then(|s| s.as_str().parse().ok())
 }
 
-fn parse_optional_float(input: &str) -> Option<f64> {
+fn parse_optional_float(input: &str) -> Option<f32> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?").unwrap();
     }
@@ -61,6 +61,19 @@ fn parse_optional_bytearray(input: &str) -> Option<Vec<u32>> {
         .map(|s| s.as_str().chars().filter_map(|c| c.to_digit(16)).collect())
 }
 
+fn parse_optional_intarray(input: &str) -> Option<Vec<i64>> {
+    input
+        .split_terminator(',')
+        .map(|f| f.parse().ok())
+        .collect()
+}
+
+fn parse_optional_floatarray(input: &str) -> Option<Vec<f32>> {
+    input
+        .split_terminator(',')
+        .map(|f| f.parse().ok())
+        .collect()
+}
 
 fn parse_optional_field(input: &str) -> Option<OptionalField> {
     use OptionalFieldValue::*;
@@ -86,7 +99,13 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
         "J" => parse_optional_string(fields[2]).map(JSON),
         // bytearray
         "H" => parse_optional_bytearray(fields[2]).map(ByteArray),
-        "B" => panic!("optional int/float arrays not yet implemented"),
+        "B" => {
+            if fields[2].starts_with('f') {
+                parse_optional_floatarray(&fields[2][1..]).map(FloatArray)
+            } else {
+                parse_optional_intarray(&fields[2][1..]).map(IntArray)
+            }
+        }
         _ => panic!(
             "Tried to parse optional field with unknown type '{}'",
             fields[0]
