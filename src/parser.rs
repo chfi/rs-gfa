@@ -61,6 +61,44 @@ fn parse_optional_bytearray(input: &str) -> Option<Vec<u32>> {
         .map(|s| s.as_str().chars().filter_map(|c| c.to_digit(16)).collect())
 }
 
+
+fn parse_optional_field(input: &str) -> Option<OptionalField> {
+    use OptionalFieldValue::*;
+
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[AifZJHB]").unwrap();
+    }
+
+    let fields: Vec<_> = input.split_terminator(':').collect();
+
+    let field_type = RE.find(fields[0]).map(|s| s.as_str())?;
+    let field_tag = parse_optional_tag(fields[1])?;
+    let field_value = match field_type {
+        // char
+        "A" => parse_optional_char(fields[2]).map(PrintableChar),
+        // int
+        "i" => parse_optional_int(fields[2]).map(SignedInt),
+        // float
+        "f" => parse_optional_float(fields[2]).map(Float),
+        // string
+        "Z" => parse_optional_string(fields[2]).map(PrintableString),
+        // JSON string
+        "J" => parse_optional_string(fields[2]).map(JSON),
+        // bytearray
+        "H" => parse_optional_bytearray(fields[2]).map(ByteArray),
+        "B" => panic!("optional int/float arrays not yet implemented"),
+        _ => panic!(
+            "Tried to parse optional field with unknown type '{}'",
+            fields[0]
+        ),
+    }?;
+
+    Some(OptionalField {
+        tag: field_tag,
+        content: field_value,
+    })
+}
+
 fn parse_header(input: &str) -> IResult<&str, Header> {
     lazy_static! {
         static ref RE: Regex = Regex::new("VN:Z:(.+)").unwrap();
