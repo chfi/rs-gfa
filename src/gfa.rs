@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Header {
-    pub version: String,
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]

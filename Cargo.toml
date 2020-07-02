@@ -12,6 +12,7 @@ categories = ["science"]
 
 [dependencies]
 lazy_static = "1.4.0"
+regex = "1"
 
 [dependencies.nom]
 version = "^5"

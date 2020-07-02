@@ -9,17 +9,23 @@ use std::io::prelude::*;
 use std::io::{BufReader, Lines};
 use std::path::PathBuf;
 
+use lazy_static::lazy_static;
+use regex::Regex;
+
 use crate::gfa::*;
 
 fn parse_header(input: &str) -> IResult<&str, Header> {
-    let opt: Vec<_> = input.split_terminator(':').collect();
+    lazy_static! {
+        static ref RE: Regex = Regex::new("VN:Z:(.+)").unwrap();
+    }
 
-    let version = opt[2].to_string();
+    let fields: Vec<_> = input.split_terminator('\t').collect();
 
-    // let col = tag(":");
-    // let (i, _opt_tag) = terminated(tag("VN"), &col)(input)?;
-    // let (i, _opt_type) = terminated(tag("Z"), &col)(i)?;
-    // let (i, version) = is_not("\n")(i)?;
+    let version = fields
+        .get(0)
+        .and_then(|f| RE.captures(f))
+        .and_then(|cs| cs.get(1))
+        .map(|res| res.as_str().to_string());
 
     Ok((input, Header { version }))
 }
@@ -190,7 +196,7 @@ mod tests {
     fn can_parse_header() {
         let hdr = "VN:Z:1.0";
         let hdr_ = Header {
-            version: "1.0".to_string(),
+            version: Some("1.0".to_string()),
         };
 
         match parse_header(hdr) {
@@ -377,7 +383,7 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
         assert_eq!(
             gfa_lines.next(),
             Some(Line::Header(Header {
-                version: "1.0".to_string()
+                version: Some("1.0".to_string())
             }))
         );
 
