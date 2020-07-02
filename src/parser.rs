@@ -14,6 +14,53 @@ use regex::Regex;
 
 use crate::gfa::*;
 
+fn parse_optional_tag(input: &str) -> Option<String> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[A-Za-z][A-Za-z0-9]").unwrap();
+    }
+    RE.find(input).map(|s| s.as_str().to_string())
+}
+
+fn parse_optional_char(input: &str) -> Option<char> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[!-~]").unwrap();
+    }
+
+    RE.find(input).and_then(|s| s.as_str().chars().nth(0))
+}
+
+fn parse_optional_int(input: &str) -> Option<i64> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[-+]?[0-9]+").unwrap();
+    }
+
+    RE.find(input).and_then(|s| s.as_str().parse().ok())
+}
+
+fn parse_optional_float(input: &str) -> Option<f64> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?").unwrap();
+    }
+
+    RE.find(input).and_then(|s| s.as_str().parse().ok())
+}
+
+fn parse_optional_string(input: &str) -> Option<String> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[ !-~]+").unwrap();
+    }
+    RE.find(input).map(|s| s.as_str().to_string())
+}
+
+fn parse_optional_bytearray(input: &str) -> Option<Vec<u32>> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[0-9A-F]+").unwrap();
+    }
+
+    RE.find(input)
+        .map(|s| s.as_str().chars().filter_map(|c| c.to_digit(16)).collect())
+}
+
 fn parse_header(input: &str) -> IResult<&str, Header> {
     lazy_static! {
         static ref RE: Regex = Regex::new("VN:Z:(.+)").unwrap();
@@ -36,11 +83,27 @@ fn parse_orient(input: &str) -> IResult<&str, Orientation> {
     alt((fwd, bkw))(input)
 }
 
+fn parse_name(input: &str) -> Option<String> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"[!-)+-<>-~][!-~]*").unwrap();
+    }
+
+    RE.find(input).map(|s| s.as_str().to_string())
+}
+
+fn parse_sequence(input: &str) -> Option<String> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"\*|[A-Za-z=.]+").unwrap();
+    }
+
+    RE.find(input).map(|s| s.as_str().to_string())
+}
+
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
-    let name = fields[0].to_string();
-    let sequence = fields[1].to_string();
+    let name = parse_name(fields[0]).unwrap();
+    let sequence = parse_sequence(fields[1]).unwrap();
 
     let result = Segment {
         name,
