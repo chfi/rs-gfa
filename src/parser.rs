@@ -203,6 +203,8 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
 }
 
 fn parse_link(input: &str) -> IResult<&str, Link> {
+    use OptionalFieldValue::*;
+
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
     let from_segment = parse_name(fields[0]).unwrap();
@@ -211,10 +213,17 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
     let (_, to_orient) = parse_orient(fields[3])?;
     let overlap = fields[4].to_string();
 
-    let opt_fields: Vec<_> = fields[5..]
+    let mut opt_fields: Vec<_> = fields[5..]
         .into_iter()
         .filter_map(|f| parse_optional_field(*f))
         .collect();
+
+    let map_quality = unwrap!(&mut opt_fields, "MQ", SignedInt);
+    let num_mismatches = unwrap!(&mut opt_fields, "NM", SignedInt);
+    let read_count = unwrap!(&mut opt_fields, "RC", SignedInt);
+    let fragment_count = unwrap!(&mut opt_fields, "FC", SignedInt);
+    let kmer_count = unwrap!(&mut opt_fields, "KC", SignedInt);
+    let edge_id = unwrap!(&mut opt_fields, "ID", PrintableString);
 
     let result = Link {
         from_segment,
@@ -222,18 +231,20 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
         to_segment,
         to_orient,
         overlap,
-        map_quality: None,
-        num_mismatches: None,
-        read_count: None,
-        fragment_count: None,
-        kmer_count: None,
-        edge_id: None,
+        map_quality,
+        num_mismatches,
+        read_count,
+        fragment_count,
+        kmer_count,
+        edge_id,
     };
 
     Ok((input, result))
 }
 
 fn parse_containment(input: &str) -> IResult<&str, Containment> {
+    use OptionalFieldValue::*;
+
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
     let container_name = fields[0].to_string();
@@ -244,6 +255,15 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
 
     let overlap = fields[5].to_string();
 
+    let mut opt_fields: Vec<_> = fields[6..]
+        .into_iter()
+        .filter_map(|f| parse_optional_field(*f))
+        .collect();
+
+    let num_mismatches = unwrap!(&mut opt_fields, "NM", SignedInt);
+    let read_coverage = unwrap!(&mut opt_fields, "RC", SignedInt);
+    let edge_id = unwrap!(&mut opt_fields, "ID", PrintableString);
+
     let result = Containment {
         container_name,
         container_orient,
@@ -251,9 +271,9 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
         contained_orient,
         overlap,
         pos: pos.parse::<usize>().unwrap(),
-        read_coverage: None,
-        num_mismatches: None,
-        edge_id: None,
+        read_coverage,
+        num_mismatches,
+        edge_id,
     };
 
     Ok((input, result))
