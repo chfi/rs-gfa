@@ -14,6 +14,14 @@ use regex::Regex;
 
 use crate::gfa::*;
 
+fn get_optional_tag(opt: &Option<OptionalField>) -> Option<&str> {
+    opt.as_ref().map(|f| f.tag.as_str())
+}
+
+fn get_optional_field<'a>(opts: &'a [OptionalField], tag: &str) -> Option<&'a OptionalField> {
+    opts.iter().find(|o| o.tag == tag)
+}
+
 fn parse_optional_tag(input: &str) -> Option<String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"[A-Za-z][A-Za-z0-9]").unwrap();
@@ -61,14 +69,7 @@ fn parse_optional_bytearray(input: &str) -> Option<Vec<u32>> {
         .map(|s| s.as_str().chars().filter_map(|c| c.to_digit(16)).collect())
 }
 
-fn parse_optional_intarray(input: &str) -> Option<Vec<i64>> {
-    input
-        .split_terminator(',')
-        .map(|f| f.parse().ok())
-        .collect()
-}
-
-fn parse_optional_floatarray(input: &str) -> Option<Vec<f32>> {
+fn parse_optional_array<T: std::str::FromStr>(input: &str) -> Option<Vec<T>> {
     input
         .split_terminator(',')
         .map(|f| f.parse().ok())
@@ -101,9 +102,9 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
         "H" => parse_optional_bytearray(fields[2]).map(ByteArray),
         "B" => {
             if fields[2].starts_with('f') {
-                parse_optional_floatarray(&fields[2][1..]).map(FloatArray)
+                parse_optional_array(&fields[2][1..]).map(FloatArray)
             } else {
-                parse_optional_intarray(&fields[2][1..]).map(IntArray)
+                parse_optional_array(&fields[2][1..]).map(IntArray)
             }
         }
         _ => panic!(
@@ -119,19 +120,12 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
 }
 
 fn parse_header(input: &str) -> IResult<&str, Header> {
-    lazy_static! {
-        static ref RE: Regex = Regex::new("VN:Z:(.+)").unwrap();
+    use OptionalFieldValue::PrintableString;
+
+    match parse_optional_field(input).map(|o| o.content) {
+        Some(PrintableString(v)) => Ok((input, Header { version: Some(v) })),
+        _ => Ok((input, Header { version: None })),
     }
-
-    let fields: Vec<_> = input.split_terminator('\t').collect();
-
-    let version = fields
-        .get(0)
-        .and_then(|f| RE.captures(f))
-        .and_then(|cs| cs.get(1))
-        .map(|res| res.as_str().to_string());
-
-    Ok((input, Header { version }))
 }
 
 fn parse_orient(input: &str) -> IResult<&str, Orientation> {
