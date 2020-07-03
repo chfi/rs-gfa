@@ -15,6 +15,64 @@ pub enum OptionalFieldValue {
     FloatArray(Vec<f32>),
 }
 
+impl OptionalFieldValue {
+    pub fn unwrap_char(self) -> Option<char> {
+        if let Self::PrintableChar(c) = self {
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_int(self) -> Option<i64> {
+        if let Self::SignedInt(i) = self {
+            Some(i)
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_float(self) -> Option<f32> {
+        if let Self::Float(f) = self {
+            Some(f)
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_string(self) -> Option<String> {
+        match self {
+            Self::PrintableString(s) => Some(s),
+            Self::JSON(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn unwrap_bytearray(self) -> Option<Vec<u32>> {
+        if let Self::ByteArray(a) = self {
+            Some(a)
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_int_array(self) -> Option<Vec<i64>> {
+        if let Self::IntArray(a) = self {
+            Some(a)
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_float_array(self) -> Option<Vec<f32>> {
+        if let Self::FloatArray(a) = self {
+            Some(a)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct OptionalField {
     pub tag: String,

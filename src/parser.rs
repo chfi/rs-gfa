@@ -156,13 +156,39 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
     let name = parse_name(fields[0]).unwrap();
     let sequence = parse_sequence(fields[1]).unwrap();
 
+    let opt_fields: Vec<_> = fields[2..]
+        .into_iter()
+        .filter_map(|f| parse_optional_field(*f))
+        .collect();
+
+    let segment_length = get_optional_field(&opt_fields, "LN")
+        .map(|o| o.content)
+        .and_then(|o| o.unwrap_int());
+    let read_count = get_optional_field(&opt_fields, "RC")
+        .map(|o| o.content)
+        .and_then(|o| o.unwrap_int());
+    let fragment_count = get_optional_field(&opt_fields, "FC")
+        .map(|o| o.content)
+        .and_then(|o| o.unwrap_int());
+    let kmer_count = get_optional_field(&opt_fields, "KC")
+        .map(|o| o.content)
+        .and_then(|o| o.unwrap_int());
+    let sha256 = get_optional_field(&opt_fields, "SH")
+        .map(|o| o.content)
+        .and_then(|o| o.unwrap_bytearray());
+    let uri = get_optional_field(&opt_fields, "UR")
+        .map(|o| o.content)
+        .and_then(|o| o.unwrap_string());
+
     let result = Segment {
         name,
         sequence,
-        read_count: None,
-        fragment_count: None,
-        kmer_count: None,
-        uri: None,
+        segment_length,
+        read_count,
+        fragment_count,
+        kmer_count,
+        sha256,
+        uri,
     };
 
     Ok((input, result))
