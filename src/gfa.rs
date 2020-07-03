@@ -89,6 +89,7 @@ pub struct Segment {
     pub kmer_count: Option<i64>,
     pub sha256: Option<Vec<u32>>,
     pub uri: Option<String>,
+    pub optional_fields: Vec<OptionalField>,
 }
 
 impl Segment {
@@ -96,12 +97,7 @@ impl Segment {
         Segment {
             name: name.to_string(),
             sequence: sequence.to_string(),
-            segment_length: None,
-            read_count: None,
-            fragment_count: None,
-            kmer_count: None,
-            sha256: None,
-            uri: None,
+            ..Default::default()
         }
     }
 }
@@ -163,6 +159,7 @@ pub struct Link {
     pub fragment_count: Option<i64>,
     pub kmer_count: Option<i64>,
     pub edge_id: Option<String>,
+    pub optional_fields: Vec<OptionalField>,
 }
 
 impl Link {
@@ -179,12 +176,7 @@ impl Link {
             to_segment: to_segment.to_string(),
             to_orient,
             overlap: overlap.to_string(),
-            map_quality: None,
-            num_mismatches: None,
-            read_count: None,
-            fragment_count: None,
-            kmer_count: None,
-            edge_id: None,
+            ..Default::default()
         }
     }
 }
@@ -200,6 +192,7 @@ pub struct Containment {
     pub read_coverage: Option<i64>,
     pub num_mismatches: Option<i64>,
     pub edge_id: Option<String>,
+    pub optional_fields: Vec<OptionalField>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
@@ -207,6 +200,7 @@ pub struct Path {
     pub path_name: String,
     pub segment_names: Vec<(String, Orientation)>,
     pub overlaps: Vec<String>,
+    pub optional_fields: Vec<OptionalField>,
 }
 
 impl Path {
@@ -226,6 +220,7 @@ impl Path {
             path_name: path_name.to_string(),
             segment_names,
             overlaps,
+            optional_fields: Vec::new(),
         }
     }
 }
@@ -277,6 +272,7 @@ mod tests {
                 ("60".to_string(), Orientation::Forward),
             ],
             overlaps: overlaps.clone(),
+            optional_fields: Vec::new(),
         };
 
         let path = Path::new(name, seg_names, overlaps);

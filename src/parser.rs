@@ -14,22 +14,24 @@ use regex::Regex;
 
 use crate::gfa::*;
 
-fn get_optional_tag(opt: &Option<OptionalField>) -> Option<&str> {
-    opt.as_ref().map(|f| f.tag.as_str())
-}
-
-fn get_optional_field<'a>(opts: &'a [OptionalField], tag: &str) -> Option<&'a OptionalField> {
-    opts.iter().find(|o| o.tag == tag)
-}
-
+/// Extract an optional field by name from a vector of them. Removes
+/// the corresponding field from the vector.
 fn drain_optional_field<'a>(
     opts: &'a mut Vec<OptionalField>,
     tag: &'a str,
 ) -> Option<OptionalField> {
-    match opts.iter().enumerate().find(|(_, o)| o.tag == tag) {
-        Some((ix, _v)) => Some(opts.remove(ix)),
-        None => None,
-    }
+    let (ix, _) = opts.iter().enumerate().find(|(_, o)| o.tag == tag)?;
+    Some(opts.remove(ix))
+}
+
+/// Macro for getting an optional field from a vector of optional
+/// fields, given a name and enum variant to extract.
+macro_rules! unwrap {
+    ($opt_fields:expr, $field:literal, $path:path) => {
+        drain_optional_field($opt_fields, $field)
+            .map(|o| o.content)
+            .and_then(|o| if let $path(x) = o { Some(x) } else { None })
+    };
 }
 
 fn parse_optional_tag(input: &str) -> Option<String> {
@@ -70,6 +72,8 @@ fn parse_optional_string(input: &str) -> Option<String> {
     RE.find(input).map(|s| s.as_str().to_string())
 }
 
+// TODO I'm not entirely sure if this works as it should; I assume it
+// should actually parse pairs of digits
 fn parse_optional_bytearray(input: &str) -> Option<Vec<u32>> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"[0-9A-F]+").unwrap();
@@ -110,6 +114,7 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
         "J" => parse_optional_string(fields[2]).map(JSON),
         // bytearray
         "H" => parse_optional_bytearray(fields[2]).map(ByteArray),
+        // float or int array
         "B" => {
             if fields[2].starts_with('f') {
                 parse_optional_array(&fields[2][1..]).map(FloatArray)
@@ -119,7 +124,7 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
         }
         _ => panic!(
             "Tried to parse optional field with unknown type '{}'",
-            fields[0]
+            fields[1]
         ),
     }?;
 
@@ -160,14 +165,6 @@ fn parse_sequence(input: &str) -> Option<String> {
     RE.find(input).map(|s| s.as_str().to_string())
 }
 
-macro_rules! unwrap {
-    ($opt_fields:expr, $field:literal, $path:path) => {
-        drain_optional_field($opt_fields, $field)
-            .map(|o| o.content)
-            .and_then(|o| if let $path(x) = o { Some(x) } else { None })
-    };
-}
-
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
     use OptionalFieldValue::*;
 
@@ -197,6 +194,7 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
         kmer_count,
         sha256,
         uri,
+        optional_fields: opt_fields,
     };
 
     Ok((input, result))
@@ -237,6 +235,7 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
         fragment_count,
         kmer_count,
         edge_id,
+        optional_fields: opt_fields,
     };
 
     Ok((input, result))
@@ -274,6 +273,7 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
         read_coverage,
         num_mismatches,
         edge_id,
+        optional_fields: opt_fields,
     };
 
     Ok((input, result))
@@ -287,8 +287,14 @@ fn parse_path(input: &str) -> IResult<&str, Path> {
     let segment_names = fields[1].split_terminator(',').collect();
     let overlaps = fields[2].split_terminator(',').map(String::from).collect();
 
-    let result = Path::new(&path_name, segment_names, overlaps);
+    let mut result = Path::new(&path_name, segment_names, overlaps);
 
+    let opt_fields: Vec<_> = fields[3..]
+        .into_iter()
+        .filter_map(|f| parse_optional_field(*f))
+        .collect();
+
+    result.optional_fields = opt_fields;
     Ok((input, result))
 }
 
@@ -392,6 +398,7 @@ mod tests {
             kmer_count: None,
             sha256: Some(vec![10, 10, 12, 12, 15, 15, 0, 5]),
             uri: None,
+            optional_fields: Vec::new(),
         };
         match parse_segment(seg) {
             Err(err) => {
@@ -416,6 +423,7 @@ mod tests {
             fragment_count: None,
             kmer_count: None,
             edge_id: None,
+            optional_fields: Vec::new(),
         };
         match parse_link(link) {
             Err(err) => {
@@ -439,6 +447,7 @@ mod tests {
             read_coverage: None,
             num_mismatches: None,
             edge_id: None,
+            optional_fields: Vec::new(),
         };
 
         match parse_containment(cont) {
@@ -461,6 +470,7 @@ mod tests {
                 ("13".to_string(), Orientation::Forward),
             ],
             overlaps: vec!["4M".to_string(), "5M".to_string()],
+            optional_fields: Vec::new(),
         };
 
         match parse_path(path) {
