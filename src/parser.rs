@@ -86,8 +86,8 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
 
     let fields: Vec<_> = input.split_terminator(':').collect();
 
-    let field_type = RE.find(fields[0]).map(|s| s.as_str())?;
-    let field_tag = parse_optional_tag(fields[1])?;
+    let field_type = RE.find(fields[1]).map(|s| s.as_str())?;
+    let field_tag = parse_optional_tag(fields[0])?;
     let field_value = match field_type {
         // char
         "A" => parse_optional_char(fields[2]).map(PrintableChar),
