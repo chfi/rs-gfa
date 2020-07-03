@@ -21,13 +21,15 @@ pub struct OptionalField {
     pub content: OptionalFieldValue,
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Segment {
     pub name: String,
     pub sequence: String,
+    pub segment_length: Option<i64>,
     pub read_count: Option<i64>,
     pub fragment_count: Option<i64>,
     pub kmer_count: Option<i64>,
+    pub sha256: Option<Vec<u32>>,
     pub uri: Option<String>,
 }
 
@@ -36,9 +38,11 @@ impl Segment {
         Segment {
             name: name.to_string(),
             sequence: sequence.to_string(),
+            segment_length: None,
             read_count: None,
             fragment_count: None,
             kmer_count: None,
+            sha256: None,
             uri: None,
         }
     }
@@ -48,6 +52,13 @@ impl Segment {
 pub enum Orientation {
     Forward,
     Backward,
+}
+
+// It makes sense for forward to be the default
+impl std::default::Default for Orientation {
+    fn default() -> Orientation {
+        Orientation::Forward
+    }
 }
 
 impl std::str::FromStr for Orientation {
@@ -81,7 +92,7 @@ impl std::fmt::Display for Orientation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Link {
     pub from_segment: String,
     pub from_orient: Orientation,
@@ -120,7 +131,7 @@ impl Link {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Containment {
     pub container_name: String,
     pub container_orient: Orientation,
@@ -133,7 +144,7 @@ pub struct Containment {
     pub edge_id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Path {
     pub path_name: String,
     pub segment_names: Vec<(String, Orientation)>,
