@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use crate::gfa::FieldValue;
 use crate::gfa::*;
 
 fn get_optional_tag(opt: &Option<OptionalField>) -> Option<&str> {
@@ -160,6 +161,13 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
         .into_iter()
         .filter_map(|f| parse_optional_field(*f))
         .collect();
+
+    let segment_length: Option<i64> = get_optional_field(&opt_fields, "LN")
+        .map(|o| o.content)
+        .and_then(|o| {
+            let x: Option<i64> = FieldValue::unwrap(o);
+            x
+        });
 
     let segment_length = get_optional_field(&opt_fields, "LN")
         .map(|o| o.content)
