@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::gfa::FieldValue;
 use crate::gfa::*;
 
 fn get_optional_tag(opt: &Option<OptionalField>) -> Option<&str> {
@@ -21,6 +20,16 @@ fn get_optional_tag(opt: &Option<OptionalField>) -> Option<&str> {
 
 fn get_optional_field<'a>(opts: &'a [OptionalField], tag: &str) -> Option<&'a OptionalField> {
     opts.iter().find(|o| o.tag == tag)
+}
+
+fn drain_optional_field<'a>(
+    opts: &'a mut Vec<OptionalField>,
+    tag: &'a str,
+) -> Option<OptionalField> {
+    match opts.iter().enumerate().find(|(_, o)| o.tag == tag) {
+        Some((ix, _v)) => Some(opts.remove(ix)),
+        None => None,
+    }
 }
 
 fn parse_optional_tag(input: &str) -> Option<String> {
@@ -151,42 +160,33 @@ fn parse_sequence(input: &str) -> Option<String> {
     RE.find(input).map(|s| s.as_str().to_string())
 }
 
+macro_rules! unwrap {
+    ($opt_fields:expr, $field:literal, $path:path) => {
+        drain_optional_field($opt_fields, $field)
+            .map(|o| o.content)
+            .and_then(|o| if let $path(x) = o { Some(x) } else { None })
+    };
+}
+
 fn parse_segment(input: &str) -> IResult<&str, Segment> {
+    use OptionalFieldValue::*;
+
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
     let name = parse_name(fields[0]).unwrap();
     let sequence = parse_sequence(fields[1]).unwrap();
 
-    let opt_fields: Vec<_> = fields[2..]
+    let mut opt_fields: Vec<_> = fields[2..]
         .into_iter()
         .filter_map(|f| parse_optional_field(*f))
         .collect();
 
-    let segment_length: Option<i64> = get_optional_field(&opt_fields, "LN")
-        .map(|o| o.content)
-        .and_then(|o| {
-            let x: Option<i64> = FieldValue::unwrap(o);
-            x
-        });
-
-    let segment_length = get_optional_field(&opt_fields, "LN")
-        .map(|o| o.content)
-        .and_then(|o| o.unwrap_int());
-    let read_count = get_optional_field(&opt_fields, "RC")
-        .map(|o| o.content)
-        .and_then(|o| o.unwrap_int());
-    let fragment_count = get_optional_field(&opt_fields, "FC")
-        .map(|o| o.content)
-        .and_then(|o| o.unwrap_int());
-    let kmer_count = get_optional_field(&opt_fields, "KC")
-        .map(|o| o.content)
-        .and_then(|o| o.unwrap_int());
-    let sha256 = get_optional_field(&opt_fields, "SH")
-        .map(|o| o.content)
-        .and_then(|o| o.unwrap_bytearray());
-    let uri = get_optional_field(&opt_fields, "UR")
-        .map(|o| o.content)
-        .and_then(|o| o.unwrap_string());
+    let segment_length = unwrap!(&mut opt_fields, "LN", SignedInt);
+    let read_count = unwrap!(&mut opt_fields, "RC", SignedInt);
+    let fragment_count = unwrap!(&mut opt_fields, "FC", SignedInt);
+    let kmer_count = unwrap!(&mut opt_fields, "KC", SignedInt);
+    let sha256 = unwrap!(&mut opt_fields, "SH", ByteArray);
+    let uri = unwrap!(&mut opt_fields, "FC", PrintableString);
 
     let result = Segment {
         name,
@@ -205,11 +205,16 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
 fn parse_link(input: &str) -> IResult<&str, Link> {
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
-    let from_segment = fields[0].to_string();
+    let from_segment = parse_name(fields[0]).unwrap();
     let (_, from_orient) = parse_orient(fields[1])?;
-    let to_segment = fields[2].to_string();
+    let to_segment = parse_name(fields[2]).unwrap();
     let (_, to_orient) = parse_orient(fields[3])?;
     let overlap = fields[4].to_string();
+
+    let opt_fields: Vec<_> = fields[5..]
+        .into_iter()
+        .filter_map(|f| parse_optional_field(*f))
+        .collect();
 
     let result = Link {
         from_segment,
@@ -357,13 +362,15 @@ mod tests {
 
     #[test]
     fn can_parse_segment() {
-        let seg = "11	ACCTT	";
+        let seg = "11\tACCTT\tLN:i:123\tSH:H:AACCFF05";
         let seg_ = Segment {
             name: "11".to_string(),
             sequence: "ACCTT".to_string(),
+            segment_length: Some(123),
             read_count: None,
             fragment_count: None,
             kmer_count: None,
+            sha256: Some(vec![10, 10, 12, 12, 15, 15, 0, 5]),
             uri: None,
         };
         match parse_segment(seg) {

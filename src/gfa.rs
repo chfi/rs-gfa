@@ -15,30 +15,6 @@ pub enum OptionalFieldValue {
     FloatArray(Vec<f32>),
 }
 
-pub trait FieldValue {
-    type Wrapped;
-    fn unwrap(opt: OptionalFieldValue) -> Option<Self::Wrapped>;
-}
-
-macro_rules! impl_unwrap {
-    ($path:path, $type:ty) => {
-        impl FieldValue for $type {
-            type Wrapped = $type;
-            fn unwrap(opt: OptionalFieldValue) -> Option<Self::Wrapped> {
-                if let $path(x) = opt {
-                    Some(x)
-                } else {
-                    None
-                }
-            }
-        }
-    };
-}
-
-impl_unwrap!(OptionalFieldValue::PrintableChar, char);
-impl_unwrap!(OptionalFieldValue::PrintableString, String);
-impl_unwrap!(OptionalFieldValue::SignedInt, i64);
-
 impl OptionalFieldValue {
     pub fn unwrap_char(self) -> Option<char> {
         if let Self::PrintableChar(c) = self {
