@@ -1,8 +1,6 @@
 use crate::gfa::{Link, Path, Segment, GFA};
 use std::fmt::Write;
 
-// TODO none of these functions use the optional fields yet
-
 // Write header
 pub fn header_string() -> String {
     "H\tVN:Z:1.0".to_string()

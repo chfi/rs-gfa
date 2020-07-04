@@ -15,68 +15,52 @@ pub enum OptionalFieldValue {
     FloatArray(Vec<f32>),
 }
 
-impl OptionalFieldValue {
-    pub fn unwrap_char(self) -> Option<char> {
-        if let Self::PrintableChar(c) = self {
-            Some(c)
-        } else {
-            None
-        }
-    }
-
-    pub fn unwrap_int(self) -> Option<i64> {
-        if let Self::SignedInt(i) = self {
-            Some(i)
-        } else {
-            None
-        }
-    }
-
-    pub fn unwrap_float(self) -> Option<f32> {
-        if let Self::Float(f) = self {
-            Some(f)
-        } else {
-            None
-        }
-    }
-
-    pub fn unwrap_string(self) -> Option<String> {
-        match self {
-            Self::PrintableString(s) => Some(s),
-            Self::JSON(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    pub fn unwrap_bytearray(self) -> Option<Vec<u32>> {
-        if let Self::ByteArray(a) = self {
-            Some(a)
-        } else {
-            None
-        }
-    }
-
-    pub fn unwrap_int_array(self) -> Option<Vec<i64>> {
-        if let Self::IntArray(a) = self {
-            Some(a)
-        } else {
-            None
-        }
-    }
-
-    pub fn unwrap_float_array(self) -> Option<Vec<f32>> {
-        if let Self::FloatArray(a) = self {
-            Some(a)
-        } else {
-            None
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct OptionalField {
     pub tag: String,
     pub content: OptionalFieldValue,
+}
+
+impl std::fmt::Display for OptionalField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use OptionalFieldValue::*;
+        let field_tag = self.tag;
+        write!(f, "{}:", self.tag)?;
+        match self.content {
+            PrintableChar(c) => write!(f, "A:{}", c),
+            SignedInt(i) => write!(f, "i:{}", i),
+            Float(d) => write!(f, "f:{}", d),
+            PrintableString(s) => write!(f, "Z:{}", s),
+            JSON(s) => write!(f, "J:{}", s),
+            ByteArray(a) => {
+                let mut array_str = String::new();
+                for x in a {
+                    array_str.push(std::char::from_digit(x, 16).unwrap());
+                }
+                write!(f, "H:{}", array_str)
+            }
+            IntArray(a) => {
+                let array_str = String::new();
+                for (i, x) in a.into_iter().enumerate() {
+                    if i > 0 {
+                        array_str.push_str(",");
+                    }
+                    array_str.push_str(&x.to_string());
+                }
+                write!(f, "B:I{}", array_str)
+            }
+            FloatArray(a) => {
+                let array_str = String::new();
+                for (i, x) in a.into_iter().enumerate() {
+                    if i > 0 {
+                        array_str.push_str(",");
+                    }
+                    array_str.push_str(&x.to_string());
+                }
+                write!(f, "B:f{}", array_str)
+            }
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
