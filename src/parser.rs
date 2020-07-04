@@ -24,9 +24,19 @@ fn drain_optional_field<'a>(
     Some(opts.remove(ix))
 }
 
+macro_rules! unwrap {
+    ($path:path, $opt:expr) => {
+        if let $path(x) = $opt {
+            Some(x)
+        } else {
+            None
+        }
+    };
+}
+
 /// Macro for getting an optional field from a vector of optional
 /// fields, given a name and enum variant to extract.
-macro_rules! unwrap {
+macro_rules! optional_field {
     ($opt_fields:expr, $field:literal, $path:path) => {
         drain_optional_field($opt_fields, $field)
             .map(|o| o.content)
@@ -134,19 +144,22 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
     })
 }
 
-fn parse_header(input: &str) -> IResult<&str, Header> {
+fn parse_header(input: &str) -> Option<Header> {
     use OptionalFieldValue::PrintableString;
-
-    match parse_optional_field(input).map(|o| o.content) {
-        Some(PrintableString(v)) => Ok((input, Header { version: Some(v) })),
-        _ => Ok((input, Header { version: None })),
-    }
+    let version = parse_optional_field(input)
+        .map(|o| o.content)
+        .and_then(|o| unwrap!(PrintableString, o));
+    Some(Header { version })
 }
 
-fn parse_orient(input: &str) -> IResult<&str, Orientation> {
+fn parse_orient(input: &str) -> Option<Orientation> {
     let fwd = map(tag("+"), |_| Orientation::Forward);
     let bkw = map(tag("-"), |_| Orientation::Backward);
-    alt((fwd, bkw))(input)
+    let result: IResult<_, _> = alt((fwd, bkw))(input);
+    match result {
+        Ok((_, o)) => Some(o),
+        _ => None,
+    }
 }
 
 fn parse_name(input: &str) -> Option<String> {
@@ -165,27 +178,27 @@ fn parse_sequence(input: &str) -> Option<String> {
     RE.find(input).map(|s| s.as_str().to_string())
 }
 
-fn parse_segment(input: &str) -> IResult<&str, Segment> {
+fn parse_segment(input: &str) -> Option<Segment> {
     use OptionalFieldValue::*;
 
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
-    let name = parse_name(fields[0]).unwrap();
-    let sequence = parse_sequence(fields[1]).unwrap();
+    let name = parse_name(fields[0])?;
+    let sequence = parse_sequence(fields[1])?;
 
     let mut opt_fields: Vec<_> = fields[2..]
         .into_iter()
         .filter_map(|f| parse_optional_field(*f))
         .collect();
 
-    let segment_length = unwrap!(&mut opt_fields, "LN", SignedInt);
-    let read_count = unwrap!(&mut opt_fields, "RC", SignedInt);
-    let fragment_count = unwrap!(&mut opt_fields, "FC", SignedInt);
-    let kmer_count = unwrap!(&mut opt_fields, "KC", SignedInt);
-    let sha256 = unwrap!(&mut opt_fields, "SH", ByteArray);
-    let uri = unwrap!(&mut opt_fields, "FC", PrintableString);
+    let segment_length = optional_field!(&mut opt_fields, "LN", SignedInt);
+    let read_count = optional_field!(&mut opt_fields, "RC", SignedInt);
+    let fragment_count = optional_field!(&mut opt_fields, "FC", SignedInt);
+    let kmer_count = optional_field!(&mut opt_fields, "KC", SignedInt);
+    let sha256 = optional_field!(&mut opt_fields, "SH", ByteArray);
+    let uri = optional_field!(&mut opt_fields, "FC", PrintableString);
 
-    let result = Segment {
+    Some(Segment {
         name,
         sequence,
         segment_length,
@@ -195,20 +208,18 @@ fn parse_segment(input: &str) -> IResult<&str, Segment> {
         sha256,
         uri,
         optional_fields: opt_fields,
-    };
-
-    Ok((input, result))
+    })
 }
 
-fn parse_link(input: &str) -> IResult<&str, Link> {
+fn parse_link(input: &str) -> Option<Link> {
     use OptionalFieldValue::*;
 
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
-    let from_segment = parse_name(fields[0]).unwrap();
-    let (_, from_orient) = parse_orient(fields[1])?;
-    let to_segment = parse_name(fields[2]).unwrap();
-    let (_, to_orient) = parse_orient(fields[3])?;
+    let from_segment = parse_name(fields[0])?;
+    let from_orient = parse_orient(fields[1])?;
+    let to_segment = parse_name(fields[2])?;
+    let to_orient = parse_orient(fields[3])?;
     let overlap = fields[4].to_string();
 
     let mut opt_fields: Vec<_> = fields[5..]
@@ -216,14 +227,14 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
         .filter_map(|f| parse_optional_field(*f))
         .collect();
 
-    let map_quality = unwrap!(&mut opt_fields, "MQ", SignedInt);
-    let num_mismatches = unwrap!(&mut opt_fields, "NM", SignedInt);
-    let read_count = unwrap!(&mut opt_fields, "RC", SignedInt);
-    let fragment_count = unwrap!(&mut opt_fields, "FC", SignedInt);
-    let kmer_count = unwrap!(&mut opt_fields, "KC", SignedInt);
-    let edge_id = unwrap!(&mut opt_fields, "ID", PrintableString);
+    let map_quality = optional_field!(&mut opt_fields, "MQ", SignedInt);
+    let num_mismatches = optional_field!(&mut opt_fields, "NM", SignedInt);
+    let read_count = optional_field!(&mut opt_fields, "RC", SignedInt);
+    let fragment_count = optional_field!(&mut opt_fields, "FC", SignedInt);
+    let kmer_count = optional_field!(&mut opt_fields, "KC", SignedInt);
+    let edge_id = optional_field!(&mut opt_fields, "ID", PrintableString);
 
-    let result = Link {
+    Some(Link {
         from_segment,
         from_orient,
         to_segment,
@@ -236,20 +247,18 @@ fn parse_link(input: &str) -> IResult<&str, Link> {
         kmer_count,
         edge_id,
         optional_fields: opt_fields,
-    };
-
-    Ok((input, result))
+    })
 }
 
-fn parse_containment(input: &str) -> IResult<&str, Containment> {
+fn parse_containment(input: &str) -> Option<Containment> {
     use OptionalFieldValue::*;
 
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
-    let container_name = fields[0].to_string();
-    let (_, container_orient) = parse_orient(fields[1])?;
-    let contained_name = fields[2].to_string();
-    let (_, contained_orient) = parse_orient(fields[3])?;
+    let container_name = parse_name(fields[0])?;
+    let container_orient = parse_orient(fields[1])?;
+    let contained_name = parse_name(fields[2])?;
+    let contained_orient = parse_orient(fields[3])?;
     let pos = fields[4];
 
     let overlap = fields[5].to_string();
@@ -259,11 +268,11 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
         .filter_map(|f| parse_optional_field(*f))
         .collect();
 
-    let num_mismatches = unwrap!(&mut opt_fields, "NM", SignedInt);
-    let read_coverage = unwrap!(&mut opt_fields, "RC", SignedInt);
-    let edge_id = unwrap!(&mut opt_fields, "ID", PrintableString);
+    let num_mismatches = optional_field!(&mut opt_fields, "NM", SignedInt);
+    let read_coverage = optional_field!(&mut opt_fields, "RC", SignedInt);
+    let edge_id = optional_field!(&mut opt_fields, "ID", PrintableString);
 
-    let result = Containment {
+    Some(Containment {
         container_name,
         container_orient,
         contained_name,
@@ -274,15 +283,13 @@ fn parse_containment(input: &str) -> IResult<&str, Containment> {
         num_mismatches,
         edge_id,
         optional_fields: opt_fields,
-    };
-
-    Ok((input, result))
+    })
 }
 
-fn parse_path(input: &str) -> IResult<&str, Path> {
+fn parse_path(input: &str) -> Option<Path> {
     let fields: Vec<_> = input.split_terminator('\t').collect();
 
-    let path_name = fields[0].to_string();
+    let path_name = parse_name(fields[0])?;
 
     let segment_names = fields[1].split_terminator(',').collect();
     let overlaps = fields[2].split_terminator(',').map(String::from).collect();
@@ -295,35 +302,36 @@ fn parse_path(input: &str) -> IResult<&str, Path> {
         .collect();
 
     result.optional_fields = opt_fields;
-    Ok((input, result))
+    Some(result)
 }
 
-pub fn parse_line(line: &str) -> IResult<&str, Line> {
-    let (i, line_type) = terminated(one_of("HSLCP#"), tab)(line)?;
+pub fn parse_line(line: &str) -> Option<Line> {
+    let result: IResult<_, _> = terminated(one_of("HSLCP#"), tab)(line);
+    let (i, line_type) = result.ok()?;
 
     match line_type {
         'H' => {
-            let (i, h) = parse_header(i)?;
-            Ok((i, Line::Header(h)))
+            let h = parse_header(i)?;
+            Some(Line::Header(h))
         }
-        '#' => Ok((i, Line::Comment)),
+        '#' => Some(Line::Comment),
         'S' => {
-            let (i, s) = parse_segment(i)?;
-            Ok((i, Line::Segment(s)))
+            let s = parse_segment(i)?;
+            Some(Line::Segment(s))
         }
         'L' => {
-            let (i, l) = parse_link(i)?;
-            Ok((i, Line::Link(l)))
+            let l = parse_link(i)?;
+            Some(Line::Link(l))
         }
         'C' => {
-            let (i, c) = parse_containment(i)?;
-            Ok((i, Line::Containment(c)))
+            let c = parse_containment(i)?;
+            Some(Line::Containment(c))
         }
         'P' => {
-            let (i, p) = parse_path(i)?;
-            Ok((i, Line::Path(p)))
+            let p = parse_path(i)?;
+            Some(Line::Path(p))
         }
-        _ => Ok((i, Line::Comment)), // ignore unrecognized headers for now
+        _ => Some(Line::Comment),
     }
 }
 
@@ -333,7 +341,7 @@ pub fn parse_gfa_stream<'a, B: BufRead>(
     input.map(|l| {
         let l = l.expect("Error parsing file");
         let r = parse_line(&l);
-        if let Ok((_, parsed)) = r {
+        if let Some(parsed) = r {
             parsed
         } else {
             panic!("Error parsing GFA lines")
@@ -353,13 +361,13 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
         let l = line.expect("Error parsing file");
         let p = parse_line(&l);
 
-        if let Ok((_, Line::Segment(s))) = p {
+        if let Some(Line::Segment(s)) = p {
             gfa.segments.push(s);
-        } else if let Ok((_, Line::Link(l))) = p {
+        } else if let Some(Line::Link(l)) = p {
             gfa.links.push(l);
-        } else if let Ok((_, Line::Containment(c))) = p {
+        } else if let Some(Line::Containment(c)) = p {
             gfa.containments.push(c);
-        } else if let Ok((_, Line::Path(pt))) = p {
+        } else if let Some(Line::Path(pt)) = p {
             gfa.paths.push(pt);
         }
     }
@@ -379,10 +387,10 @@ mod tests {
         };
 
         match parse_header(hdr) {
-            Err(err) => {
-                panic!(format!("{:?}", err));
+            None => {
+                panic!("Error parsing header");
             }
-            Ok((_res, h)) => assert_eq!(h, hdr_),
+            Some(h) => assert_eq!(h, hdr_),
         }
     }
 
@@ -401,10 +409,10 @@ mod tests {
             optional_fields: Vec::new(),
         };
         match parse_segment(seg) {
-            Err(err) => {
-                panic!(format!("{:?}", err));
+            None => {
+                panic!("Error parsing segment");
             }
-            Ok((_res, s)) => assert_eq!(s, seg_),
+            Some(s) => assert_eq!(s, seg_),
         }
     }
 
