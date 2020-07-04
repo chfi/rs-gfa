@@ -10,7 +10,8 @@ pub fn header_string() -> String {
 
 // Write segment
 pub fn write_segment<T: Write>(seg: &Segment, stream: &mut T) {
-    write!(stream, "S\t{}\t{}", seg.name, seg.sequence).expect("Error writing segment to stream");
+    write!(stream, "S\t{}\t{}", seg.name, seg.sequence)
+        .expect("Error writing segment to stream");
 }
 
 pub fn segment_string(seg: &Segment) -> String {
@@ -24,7 +25,11 @@ pub fn write_link<T: Write>(link: &Link, stream: &mut T) {
     write!(
         stream,
         "L\t{}\t{}\t{}\t{}\t{}",
-        link.from_segment, link.from_orient, link.to_segment, link.to_orient, link.overlap
+        link.from_segment,
+        link.from_orient,
+        link.to_segment,
+        link.to_orient,
+        link.overlap
     )
     .expect("Error writing link to stream");
 }
@@ -37,7 +42,8 @@ pub fn link_string(link: &Link) -> String {
 
 // Write path
 pub fn write_path<T: Write>(path: &Path, stream: &mut T) {
-    write!(stream, "P\t{}\t", path.path_name).expect("Error writing path to stream");
+    write!(stream, "P\t{}\t", path.path_name)
+        .expect("Error writing path to stream");
     path.segment_names
         .iter()
         .enumerate()
@@ -132,8 +138,10 @@ mod tests {
 
     #[test]
     fn print_gfa() {
-        let in_gfa = crate::parser::parse_gfa(&PathBuf::from("./lil.gfa")).unwrap();
-        let mut file = std::fs::File::open(&PathBuf::from("./lil.gfa")).unwrap();
+        let in_gfa =
+            crate::parser::parse_gfa(&PathBuf::from("./lil.gfa")).unwrap();
+        let mut file =
+            std::fs::File::open(&PathBuf::from("./lil.gfa")).unwrap();
         let mut file_string = String::new();
         file.read_to_string(&mut file_string).unwrap();
 

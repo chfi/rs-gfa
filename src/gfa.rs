@@ -204,7 +204,11 @@ pub struct Path {
 }
 
 impl Path {
-    pub fn new(path_name: &str, seg_names: Vec<&str>, overlaps: Vec<String>) -> Path {
+    pub fn new(
+        path_name: &str,
+        seg_names: Vec<&str>,
+        overlaps: Vec<String>,
+    ) -> Path {
         let segment_names = seg_names
             .iter()
             .map(|s| {

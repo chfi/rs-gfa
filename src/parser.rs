@@ -69,7 +69,8 @@ fn parse_optional_int(input: &str) -> Option<i64> {
 
 fn parse_optional_float(input: &str) -> Option<f32> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?").unwrap();
+        static ref RE: Regex =
+            Regex::new(r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?").unwrap();
     }
 
     RE.find(input).and_then(|s| s.as_str().parse().ok())
@@ -350,7 +351,8 @@ pub fn parse_gfa_stream<'a, B: BufRead>(
 }
 
 pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
-    let file = File::open(path).unwrap_or_else(|_| panic!("Error opening file {:?}", path));
+    let file = File::open(path)
+        .unwrap_or_else(|_| panic!("Error opening file {:?}", path));
 
     let reader = BufReader::new(file);
     let lines = reader.lines();
@@ -513,18 +515,34 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
                 Segment::new("5", "C"),
             ],
             links: vec![
-                Link::new("1", Orientation::Forward, "2", Orientation::Forward, "0M"),
-                Link::new("1", Orientation::Forward, "3", Orientation::Forward, "0M"),
+                Link::new(
+                    "1",
+                    Orientation::Forward,
+                    "2",
+                    Orientation::Forward,
+                    "0M",
+                ),
+                Link::new(
+                    "1",
+                    Orientation::Forward,
+                    "3",
+                    Orientation::Forward,
+                    "0M",
+                ),
             ],
             paths: vec![Path::new(
                 "x",
                 vec![
-                    "1+", "3+", "5+", "6+", "8+", "9+", "11+", "12+", "14+", "15+",
+                    "1+", "3+", "5+", "6+", "8+", "9+", "11+", "12+", "14+",
+                    "15+",
                 ],
-                vec!["8M", "1M", "1M", "3M", "1M", "19M", "1M", "4M", "1M", "11M"]
-                    .into_iter()
-                    .map(String::from)
-                    .collect(),
+                vec![
+                    "8M", "1M", "1M", "3M", "1M", "19M", "1M", "4M", "1M",
+                    "11M",
+                ]
+                .into_iter()
+                .map(String::from)
+                .collect(),
             )],
             containments: vec![],
         };
