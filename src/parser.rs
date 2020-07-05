@@ -197,7 +197,7 @@ fn parse_segment(input: &str) -> Option<Segment> {
     let fragment_count = optional_field!(&mut opt_fields, "FC", SignedInt);
     let kmer_count = optional_field!(&mut opt_fields, "KC", SignedInt);
     let sha256 = optional_field!(&mut opt_fields, "SH", ByteArray);
-    let uri = optional_field!(&mut opt_fields, "FC", PrintableString);
+    let uri = optional_field!(&mut opt_fields, "UR", PrintableString);
 
     Some(Segment {
         name,

@@ -21,6 +21,15 @@ pub struct OptionalField {
     pub content: OptionalFieldValue,
 }
 
+impl OptionalField {
+    pub fn new(tag: &str, content: OptionalFieldValue) -> Self {
+        OptionalField {
+            tag: tag.to_string(),
+            content,
+        }
+    }
+}
+
 impl std::fmt::Display for OptionalField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use OptionalFieldValue::*;

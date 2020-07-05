@@ -1,5 +1,30 @@
-use crate::gfa::{Link, Path, Segment, GFA};
+use crate::gfa::{Link, OptionalField, OptionalFieldValue, Path, Segment, GFA};
 use std::fmt::Write;
+
+macro_rules! write_optional {
+    ($stream:expr, $path:path, $tag:literal, $val:expr) => {
+        if let Some(v) = $val {
+            let field = OptionalField {
+                tag: $tag.to_string(),
+                content: $path(v),
+            };
+            write!($stream, "{}", field);
+        }
+    };
+}
+
+pub fn write_optional_fields<T: Write>(
+    fields: &Vec<OptionalField>,
+    stream: &mut T,
+) {
+    let result = String::new();
+    for (i, field) in fields.iter().enumerate() {
+        if i > 0 {
+            write!(stream, "\t");
+        }
+        write!(stream, "{}", field);
+    }
+}
 
 // Write header
 pub fn header_string() -> String {
@@ -8,8 +33,17 @@ pub fn header_string() -> String {
 
 // Write segment
 pub fn write_segment<T: Write>(seg: &Segment, stream: &mut T) {
+    use OptionalFieldValue::*;
     write!(stream, "S\t{}\t{}", seg.name, seg.sequence)
         .expect("Error writing segment to stream");
+
+    write_optional!(stream, SignedInt, "LN", seg.segment_length);
+    write_optional!(stream, SignedInt, "RC", seg.read_count);
+    write_optional!(stream, SignedInt, "FC", seg.fragment_count);
+    write_optional!(stream, SignedInt, "KC", seg.kmer_count);
+    write_optional!(stream, ByteArray, "SH", seg.sha256);
+    write_optional!(stream, PrintableString, "UR", seg.uri);
+    write_optional_fields(&seg.optional_fields, stream);
 }
 
 pub fn segment_string(seg: &Segment) -> String {
@@ -20,6 +54,8 @@ pub fn segment_string(seg: &Segment) -> String {
 
 // Write link
 pub fn write_link<T: Write>(link: &Link, stream: &mut T) {
+    use OptionalFieldValue::*;
+
     write!(
         stream,
         "L\t{}\t{}\t{}\t{}\t{}",
@@ -30,6 +66,14 @@ pub fn write_link<T: Write>(link: &Link, stream: &mut T) {
         link.overlap
     )
     .expect("Error writing link to stream");
+
+    write_optional!(stream, SignedInt, "LN", link.map_quality);
+    write_optional!(stream, SignedInt, "RC", link.num_mismatches);
+    write_optional!(stream, SignedInt, "RC", link.read_count);
+    write_optional!(stream, SignedInt, "FC", link.fragment_count);
+    write_optional!(stream, SignedInt, "KC", link.kmer_count);
+    write_optional!(stream, PrintableString, "SH", link.edge_id);
+    write_optional_fields(&link.optional_fields, stream);
 }
 
 pub fn link_string(link: &Link) -> String {
@@ -58,6 +102,8 @@ pub fn write_path<T: Write>(path: &Path, stream: &mut T) {
         }
         write!(stream, "{}", o).unwrap();
     });
+
+    write_optional_fields(&path.optional_fields, stream);
 }
 
 pub fn path_string(path: &Path) -> String {
