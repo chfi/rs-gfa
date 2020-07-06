@@ -8,7 +8,7 @@ macro_rules! write_optional {
                 tag: $tag.to_string(),
                 content: $path(v),
             };
-            write!($stream, "{}", field).unwrap_or_else(|err| {
+            write!($stream, "\t{}", field).unwrap_or_else(|err| {
                 panic!(
                     "Error writing optional field '{:?}' to stream, {:?}",
                     field, err
@@ -22,11 +22,8 @@ pub fn write_optional_fields<T: Write>(
     fields: &Vec<OptionalField>,
     stream: &mut T,
 ) {
-    for (i, field) in fields.iter().enumerate() {
-        if i > 0 {
-            write!(stream, "\t").unwrap();
-        }
-        write!(stream, "{}", field).unwrap_or_else(|err| {
+    for field in fields.iter() {
+        write!(stream, "\t{}", field).unwrap_or_else(|err| {
             panic!(
                 "Error writing optional field '{:?}' to stream, {:?}",
                 field, err
@@ -159,9 +156,21 @@ mod tests {
 
     #[test]
     fn print_segment() {
-        let segment = Segment::new("seg1", "GCCCTA");
+        let mut segment = Segment::new("seg1", "GCCCTA");
+        segment.read_count = Some(123);
+        segment.uri = Some("http://test.com/".to_string());
+        let opt1 = OptionalField {
+            tag: "IJ".to_string(),
+            content: OptionalFieldValue::PrintableChar('x'),
+        };
+        let opt2 = OptionalField {
+            tag: "AB".to_string(),
+            content: OptionalFieldValue::IntArray(vec![1, 2, 3, 52124]),
+        };
+        segment.optional_fields = vec![opt1, opt2];
+        let expected = "S\tseg1\tGCCCTA\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
         let string = segment_string(&segment);
-        assert_eq!(string, "S\tseg1\tGCCCTA");
+        assert_eq!(string, expected);
     }
 
     #[test]

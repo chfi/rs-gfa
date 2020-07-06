@@ -80,7 +80,10 @@ fn parse_optional_string(input: &str) -> Option<String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"[ !-~]+").unwrap();
     }
-    RE.find(input).map(|s| s.as_str().to_string())
+    println!("in string with {}", input);
+    let result = RE.find(input).map(|s| s.as_str().to_string());
+    println!("string result: {:?}", result);
+    result
 }
 
 // TODO I'm not entirely sure if this works as it should; I assume it
@@ -110,27 +113,29 @@ fn parse_optional_field(input: &str) -> Option<OptionalField> {
 
     let fields: Vec<_> = input.split_terminator(':').collect();
 
-    let field_type = RE.find(fields[1]).map(|s| s.as_str())?;
-    let field_tag = parse_optional_tag(fields[0])?;
+    // let field_type = RE.find(fields[1]).map(|s| s.as_str())?;
+    let field_type = RE.find(&input[3..=3]).map(|s| s.as_str())?;
+    let field_tag = parse_optional_tag(&input[0..=1])?;
+    let field_contents = &input[5..];
     let field_value = match field_type {
         // char
-        "A" => parse_optional_char(fields[2]).map(PrintableChar),
+        "A" => parse_optional_char(field_contents).map(PrintableChar),
         // int
-        "i" => parse_optional_int(fields[2]).map(SignedInt),
+        "i" => parse_optional_int(field_contents).map(SignedInt),
         // float
-        "f" => parse_optional_float(fields[2]).map(Float),
+        "f" => parse_optional_float(field_contents).map(Float),
         // string
-        "Z" => parse_optional_string(fields[2]).map(PrintableString),
+        "Z" => parse_optional_string(field_contents).map(PrintableString),
         // JSON string
-        "J" => parse_optional_string(fields[2]).map(JSON),
+        "J" => parse_optional_string(field_contents).map(JSON),
         // bytearray
-        "H" => parse_optional_bytearray(fields[2]).map(ByteArray),
+        "H" => parse_optional_bytearray(field_contents).map(ByteArray),
         // float or int array
         "B" => {
-            if fields[2].starts_with('f') {
-                parse_optional_array(&fields[2][1..]).map(FloatArray)
+            if field_contents.starts_with('f') {
+                parse_optional_array(&field_contents[1..]).map(FloatArray)
             } else {
-                parse_optional_array(&fields[2][1..]).map(IntArray)
+                parse_optional_array(&field_contents[1..]).map(IntArray)
             }
         }
         _ => panic!(
@@ -399,17 +404,26 @@ mod tests {
 
     #[test]
     fn can_parse_segment() {
-        let seg = "11\tACCTT\tLN:i:123\tSH:H:AACCFF05";
+        let seg = "11\tACCTT\tLN:i:123\tSH:H:AACCFF05\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
+
+        let opt1 = OptionalField {
+            tag: "IJ".to_string(),
+            content: OptionalFieldValue::PrintableChar('x'),
+        };
+        let opt2 = OptionalField {
+            tag: "AB".to_string(),
+            content: OptionalFieldValue::IntArray(vec![1, 2, 3, 52124]),
+        };
         let seg_ = Segment {
             name: "11".to_string(),
             sequence: "ACCTT".to_string(),
             segment_length: Some(123),
-            read_count: None,
+            read_count: Some(123),
             fragment_count: None,
             kmer_count: None,
             sha256: Some(vec![10, 10, 12, 12, 15, 15, 0, 5]),
-            uri: None,
-            optional_fields: Vec::new(),
+            uri: Some("http://test.com/".to_string()),
+            optional_fields: vec![opt1, opt2],
         };
         match parse_segment(seg) {
             None => {
