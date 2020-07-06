@@ -32,7 +32,7 @@ checksum = "b486ce3ccf7ffd79fdeb678eac06a9e6c09fc88d33836340becb8fffe87c5e33"
 
 [[package]]
 name = "gfa"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "lazy_static",
  "nom",
@@ -79,7 +79,6 @@ checksum = "0b471253da97532da4b61552249c521e01e736071f71c1a4f7ebbfbf0a06aad6"
 dependencies = [
  "lexical-core",
  "memchr",
- "regex",
  "version_check",
 ]
 

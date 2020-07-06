@@ -1,6 +1,6 @@
 [package]
 name = "gfa"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["christian@chfi.se"]
 edition = "2018"
 license = "MIT"
@@ -16,4 +16,3 @@ regex = "1"
 
 [dependencies.nom]
 version = "^5"
-features = ["regexp"]
