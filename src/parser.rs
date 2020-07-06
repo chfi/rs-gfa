@@ -362,8 +362,9 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
     for line in lines {
         let l = line.expect("Error parsing file");
         let p = parse_line(&l);
-
-        if let Some(Line::Segment(s)) = p {
+        if let Some(Line::Header(h)) = p {
+            gfa.version = h.version;
+        } else if let Some(Line::Segment(s)) = p {
             gfa.segments.push(s);
         } else if let Some(Line::Link(l)) = p {
             gfa.links.push(l);
@@ -436,10 +437,10 @@ mod tests {
             optional_fields: Vec::new(),
         };
         match parse_link(link) {
-            Err(err) => {
-                panic!(format!("{:?}", err));
+            None => {
+                panic!("Error parsing link");
             }
-            Ok((_res, l)) => assert_eq!(l, link_),
+            Some(l) => assert_eq!(l, link_),
         }
     }
 
@@ -461,10 +462,10 @@ mod tests {
         };
 
         match parse_containment(cont) {
-            Err(err) => {
-                panic!(format!("{:?}", err));
+            None => {
+                panic!("Error parsing containment");
             }
-            Ok((_res, c)) => assert_eq!(c, cont_),
+            Some(c) => assert_eq!(c, cont_),
         }
     }
 
@@ -484,10 +485,10 @@ mod tests {
         };
 
         match parse_path(path) {
-            Err(err) => {
-                panic!(format!("{:?}", err));
+            None => {
+                panic!("Error parsing path");
             }
-            Ok((_res, p)) => assert_eq!(p, path_),
+            Some(p) => assert_eq!(p, path_),
         }
     }
 
@@ -507,6 +508,7 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
         let mut gfa = GFA::new();
 
         let gfa_correct = GFA {
+            version: Some("1.0".to_string()),
             segments: vec![
                 Segment::new("1", "CAAATAAG"),
                 Segment::new("2", "A"),
@@ -550,11 +552,13 @@ P	x	1+,3+,5+,6+,8+,9+,11+,12+,14+,15+	8M,1M,1M,3M,1M,19M,1M,4M,1M,11M";
         for l in lines {
             let p = parse_line(l);
 
-            if let Ok((_, Line::Segment(s))) = p {
+            if let Some(Line::Header(h)) = p {
+                gfa.version = h.version;
+            } else if let Some(Line::Segment(s)) = p {
                 gfa.segments.push(s);
-            } else if let Ok((_, Line::Link(l))) = p {
+            } else if let Some(Line::Link(l)) = p {
                 gfa.links.push(l);
-            } else if let Ok((_, Line::Path(pt))) = p {
+            } else if let Some(Line::Path(pt)) = p {
                 gfa.paths.push(pt);
             }
         }

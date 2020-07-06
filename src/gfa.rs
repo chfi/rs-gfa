@@ -33,9 +33,8 @@ impl OptionalField {
 impl std::fmt::Display for OptionalField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use OptionalFieldValue::*;
-        let field_tag = self.tag;
         write!(f, "{}:", self.tag)?;
-        match self.content {
+        match &self.content {
             PrintableChar(c) => write!(f, "A:{}", c),
             SignedInt(i) => write!(f, "i:{}", i),
             Float(d) => write!(f, "f:{}", d),
@@ -44,12 +43,12 @@ impl std::fmt::Display for OptionalField {
             ByteArray(a) => {
                 let mut array_str = String::new();
                 for x in a {
-                    array_str.push(std::char::from_digit(x, 16).unwrap());
+                    array_str.push(std::char::from_digit(*x, 16).unwrap())
                 }
                 write!(f, "H:{}", array_str)
             }
             IntArray(a) => {
-                let array_str = String::new();
+                let mut array_str = String::new();
                 for (i, x) in a.into_iter().enumerate() {
                     if i > 0 {
                         array_str.push_str(",");
@@ -59,7 +58,7 @@ impl std::fmt::Display for OptionalField {
                 write!(f, "B:I{}", array_str)
             }
             FloatArray(a) => {
-                let array_str = String::new();
+                let mut array_str = String::new();
                 for (i, x) in a.into_iter().enumerate() {
                     if i > 0 {
                         array_str.push_str(",");
@@ -235,6 +234,7 @@ pub enum Line {
 // struct to hold the results of parsing a file; not actually a graph
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct GFA {
+    pub version: Option<String>,
     pub segments: Vec<Segment>,
     pub links: Vec<Link>,
     pub containments: Vec<Containment>,
