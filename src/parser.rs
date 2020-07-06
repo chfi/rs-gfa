@@ -80,9 +80,7 @@ fn parse_optional_string(input: &str) -> Option<String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"[ !-~]+").unwrap();
     }
-    println!("in string with {}", input);
     let result = RE.find(input).map(|s| s.as_str().to_string());
-    println!("string result: {:?}", result);
     result
 }
 
