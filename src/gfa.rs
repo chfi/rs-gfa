@@ -120,10 +120,10 @@ impl std::str::FromStr for Orientation {
 }
 
 impl Orientation {
-    pub fn as_bool(&self) -> bool {
+    pub fn is_reverse(&self) -> bool {
         match self {
-            Self::Forward => true,
-            Self::Backward => false,
+            Self::Forward => false,
+            Self::Backward => true,
         }
     }
 }
