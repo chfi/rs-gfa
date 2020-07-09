@@ -357,14 +357,19 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
     let file = File::open(path)
         .unwrap_or_else(|_| panic!("Error opening file {:?}", path));
 
-    let reader = BufReader::new(file);
-    let lines = reader.lines();
+    let mut buf = String::new();
+    let mut reader = BufReader::new(file);
 
     let mut gfa = GFA::new();
 
-    for line in lines {
-        let l = line.expect("Error parsing file");
-        let p = parse_line(&l);
+    loop {
+        buf.clear();
+        let res = reader.read_line(&mut buf);
+        if res.is_err() || res.unwrap() == 0 {
+            break;
+        }
+        let p = parse_line(&buf);
+
         if let Some(Line::Header(h)) = p {
             gfa.version = h.version;
         } else if let Some(Line::Segment(s)) = p {
