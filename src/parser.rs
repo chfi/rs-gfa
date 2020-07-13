@@ -313,6 +313,8 @@ pub fn parse_line(line: &str) -> Option<Line> {
     let result: IResult<_, _> = terminated(one_of("HSLCP#"), tab)(line);
     let (i, line_type) = result.ok()?;
 
+    let i = i.trim();
+
     match line_type {
         'H' => {
             let h = parse_header(i)?;
