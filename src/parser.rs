@@ -309,7 +309,10 @@ fn parse_path(input: &str) -> Option<Path> {
     Some(result)
 }
 
-pub fn parse_line(line: &str) -> Option<Line> {
+pub fn parse_line_config(
+    line: &str,
+    config: &GFAParsingConfig,
+) -> Option<Line> {
     let result: IResult<_, _> = terminated(one_of("HSLCP#"), tab)(line);
     let (i, line_type) = result.ok()?;
 
@@ -322,41 +325,70 @@ pub fn parse_line(line: &str) -> Option<Line> {
         }
         '#' => Some(Line::Comment),
         'S' => {
-            let s = parse_segment(i)?;
-            Some(Line::Segment(s))
+            if config.segments {
+                let s = parse_segment(i)?;
+                Some(Line::Segment(s))
+            } else {
+                None
+            }
         }
         'L' => {
-            let l = parse_link(i)?;
-            Some(Line::Link(l))
+            if config.links {
+                let l = parse_link(i)?;
+                Some(Line::Link(l))
+            } else {
+                None
+            }
         }
         'C' => {
-            let c = parse_containment(i)?;
-            Some(Line::Containment(c))
+            if config.containments {
+                let c = parse_containment(i)?;
+                Some(Line::Containment(c))
+            } else {
+                None
+            }
         }
         'P' => {
-            let p = parse_path(i)?;
-            Some(Line::Path(p))
+            if config.paths {
+                let p = parse_path(i)?;
+                Some(Line::Path(p))
+            } else {
+                None
+            }
         }
         _ => Some(Line::Comment),
     }
 }
 
+pub fn parse_line(line: &str) -> Option<Line> {
+    parse_line_config(line, &GFAParsingConfig::all())
+}
+
 pub fn parse_gfa_stream<'a, B: BufRead>(
     input: &'a mut Lines<B>,
 ) -> impl Iterator<Item = Line> + 'a {
-    input.filter_map(|l| {
+    parse_gfa_stream_config(input, GFAParsingConfig::all())
+}
+
+pub fn parse_gfa_stream_config<'a, B: BufRead>(
+    input: &'a mut Lines<B>,
+    config: GFAParsingConfig,
+) -> impl Iterator<Item = Line> + 'a {
+    input.filter_map(move |l| {
         let l = l.expect("Error parsing file");
-        parse_line(&l)
+        parse_line_config(&l, &config)
     })
 }
 
-pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
+pub fn parse_gfa_with_config(
+    path: &PathBuf,
+    config: GFAParsingConfig,
+) -> Option<GFA> {
     let file = File::open(path)
         .unwrap_or_else(|_| panic!("Error opening file {:?}", path));
 
     let mut buf = String::with_capacity(1024);
     let mut reader = BufReader::new(file);
-
     let mut gfa = GFA::new();
 
     loop {
@@ -365,7 +397,7 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
         if res.is_err() || res.unwrap() == 0 {
             break;
         }
-        let p = parse_line(&buf);
+        let p = parse_line_config(&buf, &config);
 
         if let Some(Line::Header(h)) = p {
             gfa.version = h.version;
@@ -381,6 +413,10 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
     }
 
     Some(gfa)
+}
+
+pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
+    parse_gfa_with_config(path, GFAParsingConfig::all())
 }
 
 #[cfg(test)]

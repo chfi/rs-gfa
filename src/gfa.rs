@@ -231,6 +231,34 @@ pub enum Line {
     Comment,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct GFAParsingConfig {
+    pub segments: bool,
+    pub links: bool,
+    pub containments: bool,
+    pub paths: bool,
+}
+
+impl GFAParsingConfig {
+    pub fn none() -> Self {
+        GFAParsingConfig {
+            segments: false,
+            links: false,
+            containments: false,
+            paths: false,
+        }
+    }
+
+    pub fn all() -> Self {
+        GFAParsingConfig {
+            segments: true,
+            links: true,
+            containments: true,
+            paths: true,
+        }
+    }
+}
+
 // struct to hold the results of parsing a file; not actually a graph
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct GFA {
