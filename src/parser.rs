@@ -344,14 +344,9 @@ pub fn parse_line(line: &str) -> Option<Line> {
 pub fn parse_gfa_stream<'a, B: BufRead>(
     input: &'a mut Lines<B>,
 ) -> impl Iterator<Item = Line> + 'a {
-    input.map(|l| {
+    input.filter_map(|l| {
         let l = l.expect("Error parsing file");
-        let r = parse_line(&l);
-        if let Some(parsed) = r {
-            parsed
-        } else {
-            panic!("Error parsing GFA lines")
-        }
+        parse_line(&l)
     })
 }
 
@@ -359,7 +354,7 @@ pub fn parse_gfa(path: &PathBuf) -> Option<GFA> {
     let file = File::open(path)
         .unwrap_or_else(|_| panic!("Error opening file {:?}", path));
 
-    let mut buf = String::new();
+    let mut buf = String::with_capacity(1024);
     let mut reader = BufReader::new(file);
 
     let mut gfa = GFA::new();
