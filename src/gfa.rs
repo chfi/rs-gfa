@@ -30,6 +30,8 @@ impl OptionalField {
     }
 }
 
+pub type OptionalFields = Vec<OptionalField>;
+
 impl std::fmt::Display for OptionalField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use OptionalFieldValue::*;
@@ -72,24 +74,18 @@ impl std::fmt::Display for OptionalField {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Segment {
+pub struct Segment<T> {
     pub name: String,
     pub sequence: String,
-    pub segment_length: Option<i64>,
-    pub read_count: Option<i64>,
-    pub fragment_count: Option<i64>,
-    pub kmer_count: Option<i64>,
-    pub sha256: Option<Vec<u32>>,
-    pub uri: Option<String>,
-    pub optional_fields: Vec<OptionalField>,
+    pub optional: T,
 }
 
-impl Segment {
+impl<T: Default> Segment<T> {
     pub fn new(name: &str, sequence: &str) -> Self {
         Segment {
             name: name.to_string(),
             sequence: sequence.to_string(),
-            ..Default::default()
+            optional: Default::default(),
         }
     }
 }
@@ -139,68 +135,70 @@ impl std::fmt::Display for Orientation {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Link {
+pub struct Link<T> {
     pub from_segment: String,
     pub from_orient: Orientation,
     pub to_segment: String,
     pub to_orient: Orientation,
-    pub overlap: String,
-    pub map_quality: Option<i64>,
-    pub num_mismatches: Option<i64>,
-    pub read_count: Option<i64>,
-    pub fragment_count: Option<i64>,
-    pub kmer_count: Option<i64>,
-    pub edge_id: Option<String>,
-    pub optional_fields: Vec<OptionalField>,
+    pub overlap: Vec<u8>,
+    pub optional: T,
+    // pub map_quality: Option<i64>,
+    // pub num_mismatches: Option<i64>,
+    // pub read_count: Option<i64>,
+    // pub fragment_count: Option<i64>,
+    // pub kmer_count: Option<i64>,
+    // pub edge_id: Option<String>,
+    // pub optional_fields: Vec<OptionalField>,
 }
 
-impl Link {
+impl<T: Default> Link<T> {
     pub fn new(
         from_segment: &str,
         from_orient: Orientation,
         to_segment: &str,
         to_orient: Orientation,
         overlap: &str,
-    ) -> Link {
+    ) -> Link<T> {
         Link {
             from_segment: from_segment.to_string(),
             from_orient,
             to_segment: to_segment.to_string(),
             to_orient,
-            overlap: overlap.to_string(),
-            ..Default::default()
+            overlap: overlap.bytes().collect(),
+            optional: Default::default(),
         }
     }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Containment {
+pub struct Containment<T> {
     pub container_name: String,
     pub container_orient: Orientation,
     pub contained_name: String,
     pub contained_orient: Orientation,
     pub pos: usize,
-    pub overlap: String,
-    pub read_coverage: Option<i64>,
-    pub num_mismatches: Option<i64>,
-    pub edge_id: Option<String>,
-    pub optional_fields: Vec<OptionalField>,
+    pub overlap: Vec<u8>,
+    pub optional: T,
+    // pub read_coverage: Option<i64>,
+    // pub num_mismatches: Option<i64>,
+    // pub edge_id: Option<String>,
+    // pub optional_fields: Vec<OptionalField>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Path {
+pub struct Path<T> {
     pub path_name: String,
     pub segment_names: Vec<(String, Orientation)>,
-    pub overlaps: Vec<String>,
-    pub optional_fields: Vec<OptionalField>,
+    pub overlaps: Vec<Vec<u8>>,
+    pub optional: T,
 }
 
-impl Path {
+impl<T: Default> Path<T> {
     pub fn new(
         path_name: &str,
         seg_names: Vec<&str>,
-        overlaps: Vec<String>,
-    ) -> Path {
+        overlaps: Vec<Vec<u8>>,
+    ) -> Path<T> {
         let segment_names = seg_names
             .iter()
             .map(|s| {
@@ -216,18 +214,18 @@ impl Path {
             path_name: path_name.to_string(),
             segment_names,
             overlaps,
-            optional_fields: Vec::new(),
+            optional: Default::default(),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Line {
+pub enum Line<T> {
     Header(Header),
-    Segment(Segment),
-    Link(Link),
-    Containment(Containment),
-    Path(Path),
+    Segment(Segment<T>),
+    Link(Link<T>),
+    Containment(Containment<T>),
+    Path(Path<T>),
     Comment,
 }
 
@@ -261,15 +259,15 @@ impl GFAParsingConfig {
 
 // struct to hold the results of parsing a file; not actually a graph
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct GFA {
+pub struct GFA<T> {
     pub version: Option<String>,
-    pub segments: Vec<Segment>,
-    pub links: Vec<Link>,
-    pub containments: Vec<Containment>,
-    pub paths: Vec<Path>,
+    pub segments: Vec<Segment<T>>,
+    pub links: Vec<Link<T>>,
+    pub containments: Vec<Containment<T>>,
+    pub paths: Vec<Path<T>>,
 }
 
-impl GFA {
+impl<T: Default> GFA<T> {
     pub fn new() -> Self {
         Default::default()
     }

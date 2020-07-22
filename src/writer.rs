@@ -1,4 +1,4 @@
-use crate::gfa::{Link, OptionalField, OptionalFieldValue, Path, Segment, GFA};
+use crate::gfa::*;
 use std::fmt::Write;
 
 macro_rules! write_optional {
@@ -41,60 +41,54 @@ pub fn write_header<T: Write>(version: &Option<String>, stream: &mut T) {
 }
 
 // Write segment
-pub fn write_segment<T: Write>(seg: &Segment, stream: &mut T) {
+pub fn write_segment<T: Write>(seg: &Segment<OptionalFields>, stream: &mut T) {
     use OptionalFieldValue::*;
     write!(stream, "S\t{}\t{}", seg.name, seg.sequence)
         .expect("Error writing segment to stream");
 
     let seg = seg.clone();
-    write_optional!(stream, SignedInt, "LN", seg.segment_length);
-    write_optional!(stream, SignedInt, "RC", seg.read_count);
-    write_optional!(stream, SignedInt, "FC", seg.fragment_count);
-    write_optional!(stream, SignedInt, "KC", seg.kmer_count);
-    write_optional!(stream, ByteArray, "SH", seg.sha256);
-    write_optional!(stream, PrintableString, "UR", seg.uri);
-    write_optional_fields(&seg.optional_fields, stream);
+    // write_optional!(stream, SignedInt, "LN", seg.segment_length);
+    // write_optional!(stream, SignedInt, "RC", seg.read_count);
+    // write_optional!(stream, SignedInt, "FC", seg.fragment_count);
+    // write_optional!(stream, SignedInt, "KC", seg.kmer_count);
+    // write_optional!(stream, ByteArray, "SH", seg.sha256);
+    // write_optional!(stream, PrintableString, "UR", seg.uri);
+    write_optional_fields(&seg.optional, stream);
 }
 
-pub fn segment_string(seg: &Segment) -> String {
+pub fn segment_string(seg: &Segment<OptionalFields>) -> String {
     let mut result = String::new();
     write_segment(seg, &mut result);
     result
 }
 
 // Write link
-pub fn write_link<T: Write>(link: &Link, stream: &mut T) {
+pub fn write_link<T: Write>(link: &Link<OptionalFields>, stream: &mut T) {
     use OptionalFieldValue::*;
 
     write!(
         stream,
-        "L\t{}\t{}\t{}\t{}\t{}",
+        "L\t{}\t{}\t{}\t{}",
         link.from_segment,
         link.from_orient,
         link.to_segment,
-        link.to_orient,
-        link.overlap
+        link.to_orient // link.overlap
+                       // TODO fix overlap!
     )
     .expect("Error writing link to stream");
 
     let link = link.clone();
-    write_optional!(stream, SignedInt, "LN", link.map_quality);
-    write_optional!(stream, SignedInt, "RC", link.num_mismatches);
-    write_optional!(stream, SignedInt, "RC", link.read_count);
-    write_optional!(stream, SignedInt, "FC", link.fragment_count);
-    write_optional!(stream, SignedInt, "KC", link.kmer_count);
-    write_optional!(stream, PrintableString, "SH", link.edge_id);
-    write_optional_fields(&link.optional_fields, stream);
+    write_optional_fields(&link.optional, stream);
 }
 
-pub fn link_string(link: &Link) -> String {
+pub fn link_string(link: &Link<OptionalFields>) -> String {
     let mut result = String::new();
     write_link(link, &mut result);
     result
 }
 
 // Write path
-pub fn write_path<T: Write>(path: &Path, stream: &mut T) {
+pub fn write_path<T: Write>(path: &Path<OptionalFields>, stream: &mut T) {
     write!(stream, "P\t{}\t", path.path_name)
         .expect("Error writing path to stream");
     path.segment_names
@@ -107,24 +101,26 @@ pub fn write_path<T: Write>(path: &Path, stream: &mut T) {
             write!(stream, "{}{}", n, o).unwrap();
         });
     write!(stream, "\t").unwrap();
+    /*
     path.overlaps.iter().enumerate().for_each(|(i, o)| {
         if i != 0 {
             write!(stream, ",").unwrap();
         }
         write!(stream, "{}", o).unwrap();
     });
+    */
 
-    write_optional_fields(&path.optional_fields, stream);
+    write_optional_fields(&path.optional, stream);
 }
 
-pub fn path_string(path: &Path) -> String {
+pub fn path_string(path: &Path<OptionalFields>) -> String {
     let mut result = String::new();
     write_path(path, &mut result);
     result
 }
 
 // Write GFA
-pub fn write_gfa<T: Write>(gfa: &GFA, stream: &mut T) {
+pub fn write_gfa<T: Write>(gfa: &GFA<OptionalFields>, stream: &mut T) {
     write_header(&gfa.version, stream);
     writeln!(stream).unwrap();
     gfa.segments.iter().for_each(|s| {
@@ -143,7 +139,7 @@ pub fn write_gfa<T: Write>(gfa: &GFA, stream: &mut T) {
     });
 }
 
-pub fn gfa_string(gfa: &GFA) -> String {
+pub fn gfa_string(gfa: &GFA<OptionalFields>) -> String {
     let mut result = String::new();
     write_gfa(gfa, &mut result);
     result
@@ -157,8 +153,8 @@ mod tests {
     #[test]
     fn print_segment() {
         let mut segment = Segment::new("seg1", "GCCCTA");
-        segment.read_count = Some(123);
-        segment.uri = Some("http://test.com/".to_string());
+        // segment.read_count = Some(123);
+        // segment.uri = Some("http://test.com/".to_string());
         let opt1 = OptionalField {
             tag: "IJ".to_string(),
             content: OptionalFieldValue::PrintableChar('x'),
@@ -167,7 +163,7 @@ mod tests {
             tag: "AB".to_string(),
             content: OptionalFieldValue::IntArray(vec![1, 2, 3, 52124]),
         };
-        segment.optional_fields = vec![opt1, opt2];
+        segment.optional = vec![opt1, opt2];
         let expected = "S\tseg1\tGCCCTA\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
         let string = segment_string(&segment);
         assert_eq!(string, expected);
