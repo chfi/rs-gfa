@@ -101,14 +101,13 @@ pub fn write_path<T: Write>(path: &Path<OptionalFields>, stream: &mut T) {
             write!(stream, "{}{}", n, o).unwrap();
         });
     write!(stream, "\t").unwrap();
-    /*
+
     path.overlaps.iter().enumerate().for_each(|(i, o)| {
         if i != 0 {
             write!(stream, ",").unwrap();
         }
-        write!(stream, "{}", o).unwrap();
+        write!(stream, "{}", String::from_utf8(o.to_vec()).unwrap()).unwrap();
     });
-    */
 
     write_optional_fields(&path.optional, stream);
 }
@@ -155,14 +154,12 @@ mod tests {
         let mut segment = Segment::new("seg1", "GCCCTA");
         // segment.read_count = Some(123);
         // segment.uri = Some("http://test.com/".to_string());
-        let opt1 = OptionalField {
-            tag: "IJ".to_string(),
-            content: OptionalFieldValue::PrintableChar('x'),
-        };
-        let opt2 = OptionalField {
-            tag: "AB".to_string(),
-            content: OptionalFieldValue::IntArray(vec![1, 2, 3, 52124]),
-        };
+        let opt1 =
+            OptionalField::new(b"IJ", OptionalFieldValue::PrintableChar('x'));
+        let opt2 = OptionalField::new(
+            b"AB",
+            OptionalFieldValue::IntArray(vec![1, 2, 3, 52124]),
+        );
         segment.optional = vec![opt1, opt2];
         let expected = "S\tseg1\tGCCCTA\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
         let string = segment_string(&segment);

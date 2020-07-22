@@ -15,16 +15,33 @@ pub enum OptionalFieldValue {
     FloatArray(Vec<f32>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct OptTag([u8; 2]);
+
+impl OptTag {
+    pub fn from_str(input: &str) -> Option<Self> {
+        if input.len() > 1 {
+            let mut fs = input.bytes();
+            let a = fs.next().filter(|x| x.is_ascii_alphabetic())?;
+            let b = fs.next().filter(|x| x.is_ascii_alphabetic())?;
+
+            Some(OptTag([a, b]))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct OptionalField {
-    pub tag: String,
+    pub tag: OptTag,
     pub content: OptionalFieldValue,
 }
 
 impl OptionalField {
-    pub fn new(tag: &str, content: OptionalFieldValue) -> Self {
+    pub fn new(tag: &[u8], content: OptionalFieldValue) -> Self {
         OptionalField {
-            tag: tag.to_string(),
+            tag: OptTag([tag[0], tag[1]]),
             content,
         }
     }
