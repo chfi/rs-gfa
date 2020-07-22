@@ -283,7 +283,7 @@ mod tests {
         let seg_names = vec!["1+", "2-", "13-", "60+"];
         let overlaps: Vec<_> = vec!["8M", "10M", "0M", "2M"]
             .into_iter()
-            .map(String::from)
+            .map(|s| s.bytes().collect())
             .collect();
 
         let path_expected = Path {
@@ -295,7 +295,7 @@ mod tests {
                 ("60".to_string(), Orientation::Forward),
             ],
             overlaps: overlaps.clone(),
-            optional_fields: Vec::new(),
+            optional: (),
         };
 
         let path = Path::new(name, seg_names, overlaps);

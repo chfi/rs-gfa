@@ -189,7 +189,7 @@ mod tests {
             vec!["13+", "51-", "241+"],
             vec!["8M", "1M", "3M"]
                 .into_iter()
-                .map(String::from)
+                .map(|s| s.bytes().collect())
                 .collect(),
         );
 
