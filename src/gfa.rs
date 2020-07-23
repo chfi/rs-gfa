@@ -216,41 +216,34 @@ pub struct Containment<T> {
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Path<T> {
-    pub path_name: String,
-    pub segment_names: Vec<(String, Orientation)>,
+    pub path_name: BString,
+    pub segment_names: BString,
     pub overlaps: Vec<Vec<u8>>,
     pub optional: T,
 }
 
-impl<T: Default> Path<T> {
-    pub fn new(
-        path_name: &str,
-        seg_names: Vec<&str>,
-        overlaps: Vec<Vec<u8>>,
-    ) -> Path<T> {
-        let segment_names = seg_names
-            .iter()
-            .map(|s| {
-                let s: &str = s;
-                let (n, o) = s.split_at(s.len() - 1);
-                let name = n.to_string();
-                let orientation = o.parse().unwrap();
-                (name, orientation)
-            })
-            .collect();
+fn parse_path_segment<'a>(input: &'a [u8]) -> (&'a BStr, Orientation) {
+    use Orientation::*;
+    let last = input.len() - 1;
+    let orient = match input[last] {
+        b'+' => Forward,
+        b'-' => Backward,
+        _ => panic!("Path segment did not include orientation"),
+    };
+    let seg = &input[..last];
+    (seg.as_ref(), orient)
+}
 
-        Path {
-            path_name: path_name.to_string(),
-            segment_names,
-            overlaps,
-            optional: Default::default(),
-        }
+impl<T> Path<T> {
+    /// A parsing iterator over the path's segments
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a BStr, Orientation)> {
+        self.segment_names.split_str(b",").map(parse_path_segment)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Line<T> {
-    Header(Header),
+    Header(Header<T>),
     Segment(Segment<T>),
     Link(Link<T>),
     Containment(Containment<T>),
@@ -274,6 +267,8 @@ impl<T: Default> GFA<T> {
     }
 }
 
+
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,10 +285,10 @@ mod tests {
         let path_expected = Path {
             path_name: name.to_string(),
             segment_names: vec![
-                ("1".to_string(), Orientation::Forward),
-                ("2".to_string(), Orientation::Backward),
-                ("13".to_string(), Orientation::Backward),
-                ("60".to_string(), Orientation::Forward),
+                (b"1".to_string(), Orientation::Forward),
+                (b"2".to_string(), Orientation::Backward),
+                (b"13".to_string(), Orientation::Backward),
+                (b"60".to_string(), Orientation::Forward),
             ],
             overlaps: overlaps.clone(),
             optional: (),
@@ -304,3 +299,5 @@ mod tests {
         assert_eq!(path, path_expected);
     }
 }
+
+*/

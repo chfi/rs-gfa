@@ -316,27 +316,14 @@ impl<T: OptFields> ParseGFA for Path<T> {
         let path_name = parse_name(&mut input)?;
 
         let next = input.next()?;
-        let segment_names = next
-            .as_ref()
-            .split_terminator(',')
-            .map(|s| {
-                let (n, o) = s.split_at(s.len() - 1);
-                let orient = match o {
-                    "+" => Orientation::Forward,
-                    "-" => Orientation::Backward,
-                    _ => panic!("Path segment did not include orientation"),
-                };
-                let name = n.to_string();
-                (name, orient)
-            })
-            .collect();
+        let segments = next.as_ref().split_str(b",");
+        let segment_names = segments.map(|s| BString::from(s)).collect();
+        // let segment_names = BString::from(next.as_ref());
+        // let segment_names = segments.map(parse_path_segment).collect();
 
         let next = input.next()?;
-        let overlaps = next
-            .as_ref()
-            .split_terminator(',')
-            .map(|s| s.bytes().collect())
-            .collect();
+        let split = next.as_ref().split_str(b",");
+        let overlaps = split.map(|s| Vec::from_slice(s)).collect();
 
         let optional = T::parse(input);
 
