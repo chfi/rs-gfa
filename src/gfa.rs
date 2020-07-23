@@ -47,6 +47,12 @@ impl OptionalField {
     }
 }
 
+impl std::fmt::Display for OptTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:x}{:x}", self.0[0], self.0[1])
+    }
+}
+
 pub type OptionalFields = Vec<OptionalField>;
 
 impl std::fmt::Display for OptionalField {

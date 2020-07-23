@@ -24,6 +24,8 @@ pub trait HasOptFields: Sized + Default {
         }
     }
     fn parse_optionals(input: &[&str]) -> Self;
+
+    fn get_field(&self, tag: OptTag) -> Option<&OptionalFieldValue>;
 }
 
 impl HasOptFields for () {
@@ -33,6 +35,10 @@ impl HasOptFields for () {
     fn parse_optionals(_: &[&str]) -> () {
         ()
     }
+
+    fn get_field(&self, _: OptTag) -> Option<&OptionalFieldValue> {
+        None
+    }
 }
 
 impl HasOptFields for Vec<OptionalField> {
@@ -41,6 +47,10 @@ impl HasOptFields for Vec<OptionalField> {
             .into_iter()
             .filter_map(|f| parse_optional_field(*f))
             .collect()
+    }
+
+    fn get_field(&self, tag: OptTag) -> Option<&OptionalFieldValue> {
+        self.iter().find(|o| o.tag == tag).map(|v| &v.content)
     }
 }
 
@@ -104,29 +114,33 @@ impl<T: HasOptFields> ParseGFA for Path<T> {
     fn parse_line(fields: &[&str]) -> Option<Self> {
         let path_name = parse_name(fields[0])?;
 
-        let segment_names = fields[1].split_terminator(',').collect();
+        let segment_names = fields[1]
+            .split_terminator(',')
+            .map(|s| {
+                let (n, o) = s.split_at(s.len() - 1);
+                let orient = match o {
+                    "+" => Orientation::Forward,
+                    "-" => Orientation::Backward,
+                    _ => panic!("Path segment did not include orientation"),
+                };
+                let name = n.to_string();
+                (name, orient)
+            })
+            .collect();
+
         let overlaps = fields[2]
             .split_terminator(',')
             .map(|s| s.bytes().collect())
             .collect();
 
-        let mut path = Path::new(&path_name, segment_names, overlaps);
-        path.optional = T::parse(2, fields);
-        Some(path)
+        Some(Path {
+            path_name,
+            segment_names,
+            overlaps,
+            optional: T::parse(3, fields),
+        })
     }
 }
-
-/*
-/// Extract an optional field by name from a vector of them. Removes
-/// the corresponding field from the vector.
-fn drain_optional_field<'a>(
-    opts: &'a mut Vec<OptionalField>,
-    tag: &'a str,
-) -> Option<OptionalField> {
-    let (ix, _) = opts.iter().enumerate().find(|(_, o)| o.tag == tag)?;
-    Some(opts.remove(ix))
-}
-*/
 
 macro_rules! unwrap {
     ($path:path, $opt:expr) => {
@@ -345,6 +359,20 @@ pub fn parse_gfa_stream_config<'a, B: BufRead>(
     })
 }
 */
+
+// pub fn parse_gfa_stream_config_iter<'a, T: HasOptFields> (
+//     input: &'a impl Iterator<
+// }
+
+pub fn parse_gfa_stream_config<'a, B: BufRead, T: HasOptFields>(
+    input: &'a mut Lines<B>,
+    config: GFAParsingConfig,
+) -> impl Iterator<Item = Line<T>> + 'a {
+    input.filter_map(move |l| {
+        let l = l.expect("Error parsing file");
+        parse_gfa_line(&l, &config)
+    })
+}
 
 pub fn parse_gfa_with_config<T: HasOptFields>(
     path: &PathBuf,
