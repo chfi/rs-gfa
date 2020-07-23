@@ -17,3 +17,10 @@ bstr = "0.2"
 
 [dependencies.nom]
 version = "^5"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "parsing_benchmark"
+harness = false
