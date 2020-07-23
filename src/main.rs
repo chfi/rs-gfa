@@ -1,52 +1,58 @@
-// use nom::{
-//     IResult,
-//     bytes::complete::{tag, take_while_m_n},
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+use std::io::{BufReader, BufWriter, Write};
+use std::path::PathBuf;
 
-// use std::collections::BTreeMap;
-// use std::collections::HashMap;
+use gfa::gfa::*;
+use gfa::parser::*;
 
-use gfa::gfa::{OptionalField, OptionalFieldValue};
-use gfa::gfageneric::*;
-// use gfa::gfageneric::*;
+fn parse_lines<'a, T: OptFields>(path: &PathBuf) -> GFA<T> {
+    let file = File::open(path).unwrap();
+    let lines = &mut BufReader::new(file).lines();
+    let conf = GFAParsingConfig::all();
+    let parser: GFAParser<T> = GFAParser::new(conf);
 
-type MinSegment<'a> = Segment<&'a [u8], ()>;
-type OptSegment<'a> = Segment<&'a [u8], Vec<OptionalField>>;
+    let mut gfa_lines =
+        lines.filter_map(move |l| parser.parse_line(&l.unwrap()));
 
-type MinNamedSeg = Segment<String, ()>;
-type OptNamedSeg = Segment<String, Vec<OptionalField>>;
+    let mut gfa: GFA<T> = GFA::new();
 
-type MinIndexSeg = Segment<usize, ()>;
-type OptIndexSeg = Segment<usize, Vec<OptionalField>>;
+    while let Some(l) = gfa_lines.next() {
+        match l {
+            Line::Segment(s) => gfa.segments.push(s),
+            Line::Link(l) => gfa.links.push(l),
+            Line::Containment(c) => gfa.containments.push(c),
+            Line::Path(p) => gfa.paths.push(p),
+            _ => (),
+        }
+    }
+    gfa
+}
 
-type MinLink<'a> = Link<&'a [u8], ()>;
-type OptLink<'a> = Link<&'a [u8], Vec<OptionalField>>;
+type NoOpts = GFA<()>;
 
-type MinNamedLink = Link<String, ()>;
-type OptNamedLink = Link<String, Vec<OptionalField>>;
-
-type MinIndexLink = Link<usize, ()>;
-type OptIndexLink = Link<usize, Vec<OptionalField>>;
-
-use std::mem::{size_of, size_of_val};
+type WithOpts = GFA<OptionalFields>;
 
 fn main() {
-    println!("Hello, world!");
+    let args: Vec<_> = std::env::args().collect();
+    let path = PathBuf::from(&args[1]);
+    // let file = File::open(&path).unwrap();
+    // let lines = &mut BufReader::new(file).lines();
 
-    println!("segments");
-    println!("min: {}", size_of::<MinSegment<'_>>());
-    println!("opt: {}", size_of::<OptSegment<'_>>());
-    println!("min: {}", size_of::<MinNamedSeg>());
-    println!("opt: {}", size_of::<OptNamedSeg>());
-    println!("min: {}", size_of::<MinIndexSeg>());
-    println!("opt: {}", size_of::<OptIndexSeg>());
+    let gfa: NoOpts = parse_lines(&path);
+    println!("# segments: {}", gfa.segments.len());
+    println!("# links: {}", gfa.links.len());
+    println!("# containments: {}", gfa.containments.len());
+    println!("# paths: {}", gfa.paths.len());
 
-    println!("links");
-    println!("min: {}", size_of::<MinLink<'_>>());
-    println!("opt: {}", size_of::<OptLink<'_>>());
+    // let conf = GFAParsingConfig::all();
+    // let parser: GFAParser<()> = GFAParser::new(conf);
 
-    println!("min: {}", size_of::<MinNamedLink>());
-    println!("opt: {}", size_of::<OptNamedLink>());
+    // let filter = parser.filter_line;
 
-    println!("min: {}", size_of::<MinIndexLink>());
-    println!("opt: {}", size_of::<OptIndexLink>());
+    // log_lines(&path);
+
+    // let file = File::open(
+    // println!("Hello, world!");
 }

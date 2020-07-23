@@ -14,8 +14,128 @@ use regex::Regex;
 
 use crate::gfa::*;
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct GFAParsingConfig {
+    pub segments: bool,
+    pub links: bool,
+    pub containments: bool,
+    pub paths: bool,
+}
+
+impl GFAParsingConfig {
+    pub fn none() -> Self {
+        GFAParsingConfig {
+            segments: false,
+            links: false,
+            containments: false,
+            paths: false,
+        }
+    }
+
+    pub fn all() -> Self {
+        GFAParsingConfig {
+            segments: true,
+            links: true,
+            containments: true,
+            paths: true,
+        }
+    }
+
+    fn make_filter(&self) -> Box<dyn for<'a> Fn(&'a str) -> Option<&'a str>> {
+        let string = self.filter_chars();
+        Box::new(move |s| {
+            if string.contains(&s[0..1]) {
+                Some(s)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn filter_chars(&self) -> String {
+        let mut result = "H".to_string();
+        if self.segments {
+            result.push('S');
+        }
+        if self.links {
+            result.push('L');
+        }
+        if self.containments {
+            result.push('C');
+        }
+        if self.paths {
+            result.push('P');
+        }
+
+        result
+    }
+}
+
+pub struct GFAParser<T> {
+    filter: Box<dyn Fn(&'_ str) -> Option<&'_ str>>,
+    _optional_fields: std::marker::PhantomData<T>,
+}
+
+impl<T> GFAParser<T> {
+    pub fn new(config: GFAParsingConfig) -> Self {
+        let filter = config.make_filter();
+
+        GFAParser {
+            filter,
+            _optional_fields: std::marker::PhantomData,
+        }
+    }
+
+    pub fn filter_line<'a>(&self, line: &'a str) -> Option<&'a str> {
+        (self.filter)(line)
+    }
+}
+
+impl<T: OptFields> GFAParser<T> {
+    pub fn parse_buf<'a>(
+        &self,
+        buf: &mut Vec<&'a str>,
+        line: &'a str,
+    ) -> Option<Line<T>> {
+        use Line::*;
+        if let Some(line) = self.filter_line(line) {
+            buf.clear();
+            line.split_terminator('\t').for_each(|f| buf.push(f));
+            let fields = &buf[1..];
+            match buf[0] {
+                "H" => parse_header(buf[0]).map(Header),
+                "S" => ParseGFA::parse_line(fields).map(Segment),
+                "L" => ParseGFA::parse_line(fields).map(Link),
+                "C" => ParseGFA::parse_line(fields).map(Containment),
+                "P" => ParseGFA::parse_line(fields).map(Path),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn parse_line(&self, line: &str) -> Option<Line<T>> {
+        use Line::*;
+        if let Some(line) = self.filter_line(line) {
+            let line: Vec<_> = line.split_terminator('\t').collect();
+            let fields = &line[1..];
+            match line[0] {
+                "H" => parse_header(fields[0]).map(Header),
+                "S" => ParseGFA::parse_line(fields).map(Segment),
+                "L" => ParseGFA::parse_line(fields).map(Link),
+                "C" => ParseGFA::parse_line(fields).map(Containment),
+                "P" => ParseGFA::parse_line(fields).map(Path),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+}
+
 // parse_optionals returns Self, not Option, since, well, they're optional anyway
-pub trait HasOptFields: Sized + Default {
+pub trait OptFields: Sized + Default {
     fn parse(skip: usize, input: &[&str]) -> Self {
         if input.len() > skip {
             Self::parse_optionals(&input[skip..])
@@ -23,12 +143,14 @@ pub trait HasOptFields: Sized + Default {
             Default::default()
         }
     }
+
+    // fn parse_iter<'a>(fields: impl Iterator<Item = &'a>) -> Self;
     fn parse_optionals(input: &[&str]) -> Self;
 
     fn get_field(&self, tag: OptTag) -> Option<&OptionalFieldValue>;
 }
 
-impl HasOptFields for () {
+impl OptFields for () {
     fn parse(_: usize, _: &[&str]) -> () {
         ()
     }
@@ -41,7 +163,7 @@ impl HasOptFields for () {
     }
 }
 
-impl HasOptFields for Vec<OptionalField> {
+impl OptFields for Vec<OptionalField> {
     fn parse_optionals(input: &[&str]) -> Self {
         input
             .into_iter()
@@ -54,11 +176,22 @@ impl HasOptFields for Vec<OptionalField> {
     }
 }
 
-trait ParseGFA: Sized {
+// type StrIter<'a> = impl Iterator<Item = &'a str>;
+
+// trait Test: Sized {
+//     fn parse_iter<'a>(input: impl Iterator<Item = &'a str>) -> Option<Self>;
+// }
+
+trait ParseGFA: Sized + Default {
     fn parse_line(input: &[&str]) -> Option<Self>;
+
+    // fn parse_iter<'a>(input: impl Iterator<Item = &'a str>) -> Option<Self> {
+    //     let fields: Vec<_> = input.collect();
+    //     Self::parse_line(&fields)
+    // }
 }
 
-impl<T: HasOptFields> ParseGFA for Segment<T> {
+impl<T: OptFields> ParseGFA for Segment<T> {
     fn parse_line(input: &[&str]) -> Option<Self> {
         let name = parse_name(input[0])?;
         let sequence = parse_sequence(input[1])?;
@@ -70,7 +203,7 @@ impl<T: HasOptFields> ParseGFA for Segment<T> {
     }
 }
 
-impl<T: HasOptFields> ParseGFA for Link<T> {
+impl<T: OptFields> ParseGFA for Link<T> {
     fn parse_line(fields: &[&str]) -> Option<Self> {
         let from_segment = parse_name(fields[0])?;
         let from_orient = parse_orient(fields[1])?;
@@ -89,7 +222,7 @@ impl<T: HasOptFields> ParseGFA for Link<T> {
     }
 }
 
-impl<T: HasOptFields> ParseGFA for Containment<T> {
+impl<T: OptFields> ParseGFA for Containment<T> {
     fn parse_line(fields: &[&str]) -> Option<Self> {
         let container_name = parse_name(fields[0])?;
         let container_orient = parse_orient(fields[1])?;
@@ -110,7 +243,7 @@ impl<T: HasOptFields> ParseGFA for Containment<T> {
     }
 }
 
-impl<T: HasOptFields> ParseGFA for Path<T> {
+impl<T: OptFields> ParseGFA for Path<T> {
     fn parse_line(fields: &[&str]) -> Option<Self> {
         let path_name = parse_name(fields[0])?;
 
@@ -291,7 +424,7 @@ fn parse_sequence(input: &str) -> Option<String> {
     RE.find(input).map(|s| s.as_str().to_string())
 }
 
-pub fn parse_gfa_line<T: HasOptFields>(
+pub fn parse_gfa_line<T: OptFields>(
     line: &str,
     config: &GFAParsingConfig,
 ) -> Option<Line<T>> {
@@ -360,11 +493,11 @@ pub fn parse_gfa_stream_config<'a, B: BufRead>(
 }
 */
 
-// pub fn parse_gfa_stream_config_iter<'a, T: HasOptFields> (
+// pub fn parse_gfa_stream_config_iter<'a, T: OptFields> (
 //     input: &'a impl Iterator<
 // }
 
-pub fn parse_gfa_stream_config<'a, B: BufRead, T: HasOptFields>(
+pub fn parse_gfa_stream_config<'a, B: BufRead, T: OptFields>(
     input: &'a mut Lines<B>,
     config: GFAParsingConfig,
 ) -> impl Iterator<Item = Line<T>> + 'a {
@@ -374,7 +507,7 @@ pub fn parse_gfa_stream_config<'a, B: BufRead, T: HasOptFields>(
     })
 }
 
-pub fn parse_gfa_with_config<T: HasOptFields>(
+pub fn parse_gfa_with_config<T: OptFields>(
     path: &PathBuf,
     config: GFAParsingConfig,
 ) -> Option<GFA<T>> {
@@ -417,7 +550,7 @@ pub fn parse_gfa_with_opt(path: &PathBuf) -> Option<GFA<OptionalFields>> {
     parse_gfa_with_config(path, GFAParsingConfig::all())
 }
 
-pub fn parse_gfa<T: HasOptFields>(path: &PathBuf) -> Option<GFA<T>> {
+pub fn parse_gfa<T: OptFields>(path: &PathBuf) -> Option<GFA<T>> {
     parse_gfa_with_config(path, GFAParsingConfig::all())
 }
 

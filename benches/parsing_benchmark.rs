@@ -1,10 +1,8 @@
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::BufReader;
 use std::path::PathBuf;
-
-use lazy_static::lazy_static;
 
 use gfa::gfa::*;
 use gfa::parser::*;
@@ -48,17 +46,13 @@ fn split_lines(lines: Vec<String>) -> GFARaw {
     gfa
 }
 
-fn parse_lines<T: HasOptFields>(input: &[String]) -> GFA<T> {
-    // let file = File::open(path)?;
-    // let lines = &mut BufReader::new(file).lines();
-    let mut lines = input.iter();
+fn parse_lines_old<T: OptFields>(input: &[String]) -> GFA<T> {
     let conf = GFAParsingConfig::all();
     let parse = |l| parse_gfa_line(l, &conf);
-
     let mut gfa: GFA<T> = GFA::new();
 
-    while let Some(l) = lines.next() {
-        match parse(l) {
+    for line in input.iter() {
+        match parse(line) {
             Some(Line::Segment(s)) => gfa.segments.push(s),
             Some(Line::Link(l)) => gfa.links.push(l),
             Some(Line::Containment(c)) => gfa.containments.push(c),
@@ -66,6 +60,26 @@ fn parse_lines<T: HasOptFields>(input: &[String]) -> GFA<T> {
             _ => (),
         }
     }
+
+    gfa
+}
+
+fn parse_lines<T: OptFields>(input: &[String]) -> GFA<T> {
+    let conf = GFAParsingConfig::all();
+    let parser: GFAParser<T> = GFAParser::new(conf);
+
+    let mut gfa: GFA<T> = GFA::new();
+
+    for line in input.iter() {
+        match parser.parse_line(line) {
+            Some(Line::Segment(s)) => gfa.segments.push(s),
+            Some(Line::Link(l)) => gfa.links.push(l),
+            Some(Line::Containment(c)) => gfa.containments.push(c),
+            Some(Line::Path(p)) => gfa.paths.push(p),
+            _ => (),
+        }
+    }
+
     gfa
 }
 
