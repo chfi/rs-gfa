@@ -91,6 +91,8 @@ pub fn link_string(link: &Link<OptionalFields>) -> String {
 pub fn write_path<T: Write>(path: &Path<OptionalFields>, stream: &mut T) {
     write!(stream, "P\t{}\t", path.path_name)
         .expect("Error writing path to stream");
+
+    /*
     path.segment_names
         .iter()
         .enumerate()
@@ -101,6 +103,7 @@ pub fn write_path<T: Write>(path: &Path<OptionalFields>, stream: &mut T) {
             write!(stream, "{}{}", n, o).unwrap();
         });
     write!(stream, "\t").unwrap();
+    */
 
     path.overlaps.iter().enumerate().for_each(|(i, o)| {
         if i != 0 {

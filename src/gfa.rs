@@ -1,15 +1,19 @@
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct Header {
-    pub version: Option<String>,
+use bstr::{BStr, BString, ByteSlice, ByteVec};
+use std::collections::HashMap;
+
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+pub struct Header<T> {
+    pub version: Option<BString>,
+    pub optional: T,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum OptionalFieldValue {
-    PrintableChar(char),
+    PrintableChar(u8),
     SignedInt(i64),
     Float(f32),
-    PrintableString(String),
-    JSON(String),
+    PrintableString(BString),
+    JSON(BString),
     ByteArray(Vec<u32>),
     IntArray(Vec<i64>),
     FloatArray(Vec<f32>),
@@ -19,6 +23,19 @@ pub enum OptionalFieldValue {
 pub struct OptTag([u8; 2]);
 
 impl OptTag {
+    pub fn from_bytes(input: &[u8]) -> Option<Self> {
+        if input.len() > 2 {
+            panic!("tried to parse optional tag with more than two chars");
+        } else if input.len() > 1 {
+            if input[0..=1].iter().all(|x| x.is_ascii_alphabetic()) {
+                Some(OptTag([input[0], input[1]]))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
     pub fn from_str(input: &str) -> Option<Self> {
         if input.len() > 1 {
             let mut fs = input.bytes();
@@ -98,16 +115,16 @@ impl std::fmt::Display for OptionalField {
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Segment<T> {
-    pub name: String,
-    pub sequence: String,
+    pub name: BString,
+    pub sequence: BString,
     pub optional: T,
 }
 
 impl<T: Default> Segment<T> {
-    pub fn new(name: &str, sequence: &str) -> Self {
+    pub fn new(name: &[u8], sequence: &[u8]) -> Self {
         Segment {
-            name: name.to_string(),
-            sequence: sequence.to_string(),
+            name: BString::from(name),
+            sequence: BString::from(sequence),
             optional: Default::default(),
         }
     }
@@ -159,35 +176,28 @@ impl std::fmt::Display for Orientation {
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Link<T> {
-    pub from_segment: String,
+    pub from_segment: BString,
     pub from_orient: Orientation,
-    pub to_segment: String,
+    pub to_segment: BString,
     pub to_orient: Orientation,
     pub overlap: Vec<u8>,
     pub optional: T,
-    // pub map_quality: Option<i64>,
-    // pub num_mismatches: Option<i64>,
-    // pub read_count: Option<i64>,
-    // pub fragment_count: Option<i64>,
-    // pub kmer_count: Option<i64>,
-    // pub edge_id: Option<String>,
-    // pub optional_fields: Vec<OptionalField>,
 }
 
 impl<T: Default> Link<T> {
     pub fn new(
-        from_segment: &str,
+        from_segment: &[u8],
         from_orient: Orientation,
-        to_segment: &str,
+        to_segment: &[u8],
         to_orient: Orientation,
-        overlap: &str,
+        overlap: &[u8],
     ) -> Link<T> {
         Link {
-            from_segment: from_segment.to_string(),
+            from_segment: from_segment.into(),
             from_orient,
-            to_segment: to_segment.to_string(),
+            to_segment: to_segment.into(),
             to_orient,
-            overlap: overlap.bytes().collect(),
+            overlap: Vec::from_slice(overlap),
             optional: Default::default(),
         }
     }
@@ -195,17 +205,13 @@ impl<T: Default> Link<T> {
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Containment<T> {
-    pub container_name: String,
+    pub container_name: BString,
     pub container_orient: Orientation,
-    pub contained_name: String,
+    pub contained_name: BString,
     pub contained_orient: Orientation,
     pub pos: usize,
     pub overlap: Vec<u8>,
     pub optional: T,
-    // pub read_coverage: Option<i64>,
-    // pub num_mismatches: Option<i64>,
-    // pub edge_id: Option<String>,
-    // pub optional_fields: Vec<OptionalField>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
