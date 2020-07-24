@@ -1,5 +1,5 @@
 use crate::gfa::*;
-use crate::parser::OptFields;
+use crate::optfields::*;
 use bstr::{BStr, BString, ByteSlice, ByteVec};
 use std::fmt::Display;
 use std::fmt::Write;
@@ -16,10 +16,9 @@ pub fn write_optional_fields<U: OptFields, T: Write>(opts: &U, stream: &mut T) {
 }
 
 pub fn write_header<T: Write>(version: &Option<String>, stream: &mut T) {
+    write!(stream, "H").unwrap();
     if let Some(v) = version {
-        write!(stream, "H\tVN:Z:{}", v).unwrap();
-    } else {
-        write!(stream, "H").unwrap();
+        write!(stream, "\tVN:Z:{}", v).unwrap();
     }
 }
 
@@ -47,16 +46,15 @@ pub fn write_link<N: Display, T: Write>(
 ) {
     write!(
         stream,
-        "L\t{}\t{}\t{}\t{}",
+        "L\t{}\t{}\t{}\t{}\t{}",
         link.from_segment,
         link.from_orient,
         link.to_segment,
-        link.to_orient // link.overlap
-                       // TODO fix overlap!
+        link.to_orient,
+        link.overlap,
     )
     .expect("Error writing link to stream");
 
-    let link = link.clone();
     write_optional_fields(&link.optional, stream);
 }
 

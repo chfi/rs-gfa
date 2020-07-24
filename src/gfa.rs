@@ -1,136 +1,21 @@
 use bstr::{BStr, BString, ByteSlice, ByteVec};
-use std::collections::HashMap;
+
+use crate::optfields::*;
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Header<T> {
+pub struct Header<T: OptFields> {
     pub version: Option<BString>,
     pub optional: T,
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum OptionalFieldValue {
-    PrintableChar(u8),
-    SignedInt(i64),
-    Float(f32),
-    PrintableString(BString),
-    JSON(BString),
-    ByteArray(Vec<u32>),
-    IntArray(Vec<i64>),
-    FloatArray(Vec<f32>),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct OptTag([u8; 2]);
-
-impl OptTag {
-    pub fn new(input: &[u8]) -> Self {
-        if input.len() == 2
-            && input[0..=1].iter().all(|x| x.is_ascii_alphabetic())
-        {
-            OptTag([input[0], input[1]])
-        } else {
-            panic!("error parsing optional tag");
-        }
-    }
-
-    pub fn from_bytes(input: &[u8]) -> Option<Self> {
-        if input.len() > 2 {
-            panic!("tried to parse optional tag with more than two chars");
-        } else if input.len() > 1 {
-            if input[0..=1].iter().all(|x| x.is_ascii_alphabetic()) {
-                Some(OptTag([input[0], input[1]]))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-    pub fn from_str(input: &str) -> Option<Self> {
-        if input.len() > 1 {
-            let mut fs = input.bytes();
-            let a = fs.next().filter(|x| x.is_ascii_alphabetic())?;
-            let b = fs.next().filter(|x| x.is_ascii_alphabetic())?;
-
-            Some(OptTag([a, b]))
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct OptionalField {
-    pub tag: OptTag,
-    pub content: OptionalFieldValue,
-}
-
-impl OptionalField {
-    pub fn new(tag: &[u8], content: OptionalFieldValue) -> Self {
-        OptionalField {
-            tag: OptTag([tag[0], tag[1]]),
-            content,
-        }
-    }
-}
-
-impl std::fmt::Display for OptTag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:x}{:x}", self.0[0], self.0[1])
-    }
-}
-
-pub type OptionalFields = Vec<OptionalField>;
-
-impl std::fmt::Display for OptionalField {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use OptionalFieldValue::*;
-        write!(f, "{}:", self.tag)?;
-        match &self.content {
-            PrintableChar(c) => write!(f, "A:{}", c),
-            SignedInt(i) => write!(f, "i:{}", i),
-            Float(d) => write!(f, "f:{}", d),
-            PrintableString(s) => write!(f, "Z:{}", s),
-            JSON(s) => write!(f, "J:{}", s),
-            ByteArray(a) => {
-                let mut array_str = String::new();
-                for x in a {
-                    array_str.push(std::char::from_digit(*x, 16).unwrap())
-                }
-                write!(f, "H:{}", array_str)
-            }
-            IntArray(a) => {
-                let mut array_str = String::new();
-                for (i, x) in a.into_iter().enumerate() {
-                    if i > 0 {
-                        array_str.push_str(",");
-                    }
-                    array_str.push_str(&x.to_string());
-                }
-                write!(f, "B:I{}", array_str)
-            }
-            FloatArray(a) => {
-                let mut array_str = String::new();
-                for (i, x) in a.into_iter().enumerate() {
-                    if i > 0 {
-                        array_str.push_str(",");
-                    }
-                    array_str.push_str(&x.to_string());
-                }
-                write!(f, "B:f{}", array_str)
-            }
-        }
-    }
-}
-
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Segment<N, T> {
+pub struct Segment<N, T: OptFields> {
     pub name: N,
     pub sequence: BString,
     pub optional: T,
 }
 
-impl<T: Default> Segment<BString, T> {
+impl<T: OptFields> Segment<BString, T> {
     pub fn new(name: &[u8], sequence: &[u8]) -> Self {
         Segment {
             name: BString::from(name),
@@ -153,6 +38,31 @@ impl std::default::Default for Orientation {
     }
 }
 
+impl Orientation {
+    pub fn is_reverse(&self) -> bool {
+        match self {
+            Self::Forward => false,
+            Self::Backward => true,
+        }
+    }
+
+    pub fn from_bytes<T: AsRef<[u8]>>(bs: T) -> Option<Self> {
+        match bs.as_ref() {
+            b"+" => Some(Orientation::Forward),
+            b"-" => Some(Orientation::Backward),
+            _ => None,
+        }
+    }
+
+    pub fn from_u8(u: u8) -> Option<Self> {
+        match u {
+            b'+' => Some(Self::Forward),
+            b'-' => Some(Self::Backward),
+            _ => None,
+        }
+    }
+}
+
 impl std::str::FromStr for Orientation {
     type Err = &'static str;
 
@@ -161,15 +71,6 @@ impl std::str::FromStr for Orientation {
             "+" => Ok(Self::Forward),
             "-" => Ok(Self::Backward),
             _ => Err("Could not parse orientation (was not + or -)"),
-        }
-    }
-}
-
-impl Orientation {
-    pub fn is_reverse(&self) -> bool {
-        match self {
-            Self::Forward => false,
-            Self::Backward => true,
         }
     }
 }
@@ -185,16 +86,16 @@ impl std::fmt::Display for Orientation {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Link<N, T> {
+pub struct Link<N, T: OptFields> {
     pub from_segment: N,
     pub from_orient: Orientation,
     pub to_segment: N,
     pub to_orient: Orientation,
-    pub overlap: Vec<u8>,
+    pub overlap: BString,
     pub optional: T,
 }
 
-impl<T: Default> Link<BString, T> {
+impl<T: OptFields> Link<BString, T> {
     pub fn new(
         from_segment: &[u8],
         from_orient: Orientation,
@@ -207,28 +108,28 @@ impl<T: Default> Link<BString, T> {
             from_orient,
             to_segment: to_segment.into(),
             to_orient,
-            overlap: Vec::from_slice(overlap),
+            overlap: overlap.into(),
             optional: Default::default(),
         }
     }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Containment<N, T> {
+pub struct Containment<N, T: OptFields> {
     pub container_name: N,
     pub container_orient: Orientation,
     pub contained_name: N,
     pub contained_orient: Orientation,
     pub pos: usize,
-    pub overlap: Vec<u8>,
+    pub overlap: BString,
     pub optional: T,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Path<T> {
+pub struct Path<T: OptFields> {
     pub path_name: BString,
     pub segment_names: BString,
-    pub overlaps: Vec<Vec<u8>>,
+    pub overlaps: Vec<BString>,
     pub optional: T,
 }
 
@@ -244,7 +145,7 @@ fn parse_path_segment<'a>(input: &'a [u8]) -> (&'a BStr, Orientation) {
     (seg.as_ref(), orient)
 }
 
-impl<T> Path<T> {
+impl<T: OptFields> Path<T> {
     /// A parsing iterator over the path's segments
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a BStr, Orientation)> {
         self.segment_names.split_str(b",").map(parse_path_segment)
@@ -252,7 +153,7 @@ impl<T> Path<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Line<N, T> {
+pub enum Line<N, T: OptFields> {
     Header(Header<T>),
     Segment(Segment<N, T>),
     Link(Link<N, T>),
@@ -261,9 +162,21 @@ pub enum Line<N, T> {
     Comment,
 }
 
-// struct to hold the results of parsing a file; not actually a graph
+pub fn gfa_into_iter<N, T: OptFields>(
+    gfa: GFA<N, T>,
+) -> impl Iterator<Item = Line<N, T>> {
+    use Line::*;
+    let segs = gfa.segments.into_iter().map(Segment);
+    let links = gfa.links.into_iter().map(Link);
+    let conts = gfa.containments.into_iter().map(Containment);
+    let paths = gfa.paths.into_iter().map(Path);
+
+    segs.chain(links).chain(conts).chain(paths)
+}
+
+/// Simple representation of a parsed GFA file
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct GFA<N, T> {
+pub struct GFA<N, T: OptFields> {
     pub version: Option<String>,
     pub segments: Vec<Segment<N, T>>,
     pub links: Vec<Link<N, T>>,
@@ -271,12 +184,11 @@ pub struct GFA<N, T> {
     pub paths: Vec<Path<T>>,
 }
 
-impl<N: Default, T: Default> GFA<N, T> {
+impl<N: Default, T: OptFields> GFA<N, T> {
     pub fn new() -> Self {
         Default::default()
     }
 }
-
 
 /*
 #[cfg(test)]
