@@ -23,6 +23,16 @@ pub enum OptionalFieldValue {
 pub struct OptTag([u8; 2]);
 
 impl OptTag {
+    pub fn new(input: &[u8]) -> Self {
+        if input.len() == 2
+            && input[0..=1].iter().all(|x| x.is_ascii_alphabetic())
+        {
+            OptTag([input[0], input[1]])
+        } else {
+            panic!("error parsing optional tag");
+        }
+    }
+
     pub fn from_bytes(input: &[u8]) -> Option<Self> {
         if input.len() > 2 {
             panic!("tried to parse optional tag with more than two chars");
@@ -114,13 +124,13 @@ impl std::fmt::Display for OptionalField {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Segment<T> {
-    pub name: BString,
+pub struct Segment<N, T> {
+    pub name: N,
     pub sequence: BString,
     pub optional: T,
 }
 
-impl<T: Default> Segment<T> {
+impl<T: Default> Segment<BString, T> {
     pub fn new(name: &[u8], sequence: &[u8]) -> Self {
         Segment {
             name: BString::from(name),
@@ -175,23 +185,23 @@ impl std::fmt::Display for Orientation {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Link<T> {
-    pub from_segment: BString,
+pub struct Link<N, T> {
+    pub from_segment: N,
     pub from_orient: Orientation,
-    pub to_segment: BString,
+    pub to_segment: N,
     pub to_orient: Orientation,
     pub overlap: Vec<u8>,
     pub optional: T,
 }
 
-impl<T: Default> Link<T> {
+impl<T: Default> Link<BString, T> {
     pub fn new(
         from_segment: &[u8],
         from_orient: Orientation,
         to_segment: &[u8],
         to_orient: Orientation,
         overlap: &[u8],
-    ) -> Link<T> {
+    ) -> Link<BString, T> {
         Link {
             from_segment: from_segment.into(),
             from_orient,
@@ -204,10 +214,10 @@ impl<T: Default> Link<T> {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Containment<T> {
-    pub container_name: BString,
+pub struct Containment<N, T> {
+    pub container_name: N,
     pub container_orient: Orientation,
-    pub contained_name: BString,
+    pub contained_name: N,
     pub contained_orient: Orientation,
     pub pos: usize,
     pub overlap: Vec<u8>,
@@ -242,26 +252,26 @@ impl<T> Path<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Line<T> {
+pub enum Line<N, T> {
     Header(Header<T>),
-    Segment(Segment<T>),
-    Link(Link<T>),
-    Containment(Containment<T>),
+    Segment(Segment<N, T>),
+    Link(Link<N, T>),
+    Containment(Containment<N, T>),
     Path(Path<T>),
     Comment,
 }
 
 // struct to hold the results of parsing a file; not actually a graph
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct GFA<T> {
+pub struct GFA<N, T> {
     pub version: Option<String>,
-    pub segments: Vec<Segment<T>>,
-    pub links: Vec<Link<T>>,
-    pub containments: Vec<Containment<T>>,
+    pub segments: Vec<Segment<N, T>>,
+    pub links: Vec<Link<N, T>>,
+    pub containments: Vec<Containment<N, T>>,
     pub paths: Vec<Path<T>>,
 }
 
-impl<T: Default> GFA<T> {
+impl<N: Default, T: Default> GFA<N, T> {
     pub fn new() -> Self {
         Default::default()
     }

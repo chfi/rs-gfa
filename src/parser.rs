@@ -88,7 +88,7 @@ impl<T> GFAParser<T> {
 }
 
 impl<T: OptFields> GFAParser<T> {
-    pub fn parse_all<I>(&self, mut input: I) -> GFA<T>
+    pub fn parse_all<I>(&self, mut input: I) -> GFA<BString, T>
     where
         I: Iterator,
         I::Item: AsRef<BStr>,
@@ -108,7 +108,7 @@ impl<T: OptFields> GFAParser<T> {
         gfa
     }
 
-    pub fn parse_line(&self, line: &BStr) -> Option<Line<T>> {
+    pub fn parse_line(&self, line: &BStr) -> Option<Line<BString, T>> {
         use Line::*;
         if let Some(line) = self.filter_line(line) {
             let mut fields = line.split_str(b"\t");
@@ -129,15 +129,25 @@ impl<T: OptFields> GFAParser<T> {
 
 // parse_optionals returns Self, not Option, since, well, they're optional anyway
 pub trait OptFields: Sized + Default {
+    fn get_field(&self, tag: OptTag) -> Option<&OptionalField>;
+
+    fn fields(&self) -> &[OptionalField];
+
     fn parse<T>(input: T) -> Self
     where
         T: IntoIterator,
         T::Item: AsRef<[u8]>;
-
-    fn get_field(&self, tag: OptTag) -> Option<&OptionalFieldValue>;
 }
 
 impl OptFields for () {
+    fn get_field(&self, _: OptTag) -> Option<&OptionalField> {
+        None
+    }
+
+    fn fields(&self) -> &[OptionalField] {
+        &[]
+    }
+
     fn parse<T>(_input: T) -> Self
     where
         T: IntoIterator,
@@ -145,13 +155,17 @@ impl OptFields for () {
     {
         ()
     }
-
-    fn get_field(&self, _: OptTag) -> Option<&OptionalFieldValue> {
-        None
-    }
 }
 
 impl OptFields for Vec<OptionalField> {
+    fn get_field(&self, tag: OptTag) -> Option<&OptionalField> {
+        self.iter().find(|o| o.tag == tag).map(|v| v)
+    }
+
+    fn fields(&self) -> &[OptionalField] {
+        self.as_slice()
+    }
+
     fn parse<T>(input: T) -> Self
     where
         T: IntoIterator,
@@ -161,10 +175,6 @@ impl OptFields for Vec<OptionalField> {
             .into_iter()
             .filter_map(|f| parse_optional_field(f.as_ref()))
             .collect()
-    }
-
-    fn get_field(&self, tag: OptTag) -> Option<&OptionalFieldValue> {
-        self.iter().find(|o| o.tag == tag).map(|v| &v.content)
     }
 }
 
@@ -235,7 +245,7 @@ where
     }
 }
 
-impl<T: OptFields> ParseGFA for Segment<T> {
+impl<T: OptFields> ParseGFA for Segment<BString, T> {
     fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
@@ -252,7 +262,7 @@ impl<T: OptFields> ParseGFA for Segment<T> {
     }
 }
 
-impl<T: OptFields> ParseGFA for Link<T> {
+impl<T: OptFields> ParseGFA for Link<BString, T> {
     fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
@@ -276,7 +286,7 @@ impl<T: OptFields> ParseGFA for Link<T> {
     }
 }
 
-impl<T: OptFields> ParseGFA for Containment<T> {
+impl<T: OptFields> ParseGFA for Containment<BString, T> {
     fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
@@ -633,7 +643,7 @@ mod tests {
             optional: (),
         };
         let fields = link.split_terminator('\t');
-        let parsed: Option<Link<()>> = ParseGFA::parse_line(fields);
+        let parsed: Option<Link<BString, ()>> = ParseGFA::parse_line(fields);
         match parsed {
             None => {
                 panic!("Error parsing link");
@@ -657,7 +667,8 @@ mod tests {
         };
 
         let fields = cont.split_terminator('\t');
-        let parsed: Option<Containment<()>> = ParseGFA::parse_line(fields);
+        let parsed: Option<Containment<BString, ()>> =
+            ParseGFA::parse_line(fields);
         match parsed {
             None => {
                 panic!("Error parsing containment");
@@ -671,12 +682,8 @@ mod tests {
         let path = "14\t11+,12-,13+\t4M,5M";
 
         let path_ = Path {
-            path_name: "14".to_string(),
-            segment_names: vec![
-                ("11".to_string(), Orientation::Forward),
-                ("12".to_string(), Orientation::Backward),
-                ("13".to_string(), Orientation::Forward),
-            ],
+            path_name: "14".into(),
+            segment_names: "11+,12-,13+".into(),
             overlaps: vec![b"4M".to_vec(), b"5M".to_vec()],
             optional: (),
         };
@@ -769,6 +776,7 @@ mod tests {
         }
         */
 
+    /*
     #[test]
     fn can_parse_gfa_file() {
         let gfa = parse_gfa::<()>(&PathBuf::from("./lil.gfa"));
@@ -788,6 +796,7 @@ mod tests {
             }
         }
     }
+    */
 
     /*
     #[test]
@@ -837,8 +846,8 @@ mod tests {
                 ByteArray(vec![0xA, 0xA, 0xC, 0xC, 0xF, 0xF, 0x0, 0x5]),
             ),
             (b"RC", SignedInt(123)),
-            (b"UR", PrintableString("http://test.com/".to_string())),
-            (b"IJ", PrintableChar('x')),
+            (b"UR", PrintableString(BString::from("http://test.com/"))),
+            (b"IJ", PrintableChar(b'x')),
             (b"AB", IntArray(vec![1, 2, 3, 52124])),
         ]
         .into_iter()
@@ -847,19 +856,19 @@ mod tests {
 
         // Ignoring optional fields works
 
-        let segment_1: Option<Segment<()>> =
+        let segment_1: Option<Segment<BString, ()>> =
             ParseGFA::parse_line(fields.clone());
 
         assert_eq!(
             Some(Segment {
-                name: name.to_string(),
-                sequence: seq.to_string(),
+                name: BString::from(name),
+                sequence: BString::from(seq),
                 optional: ()
             }),
             segment_1
         );
 
-        let segment_2: Segment<OptionalFields> =
+        let segment_2: Segment<BString, OptionalFields> =
             ParseGFA::parse_line(fields.clone()).unwrap();
 
         assert_eq!(segment_2.name, name);
