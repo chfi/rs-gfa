@@ -123,14 +123,13 @@ mod tests {
 
     #[test]
     fn print_segment() {
+        use OptFieldVal::*;
         let mut segment = Segment::new(b"seg1", b"GCCCTA");
-        let opt1 =
-            OptionalField::new(b"IJ", OptionalFieldValue::PrintableChar(b'x'));
-        let opt2 = OptionalField::new(
-            b"AB",
-            OptionalFieldValue::IntArray(vec![1, 2, 3, 52124]),
-        );
-        segment.optional = vec![opt1, opt2];
+        let opt_ij = OptField::new(b"IJ", A(b'x'));
+        let opt_ab = OptField::new(b"AB", BInt(vec![1, 2, 3, 52124]));
+        let opt_ur = OptField::new(b"UR", Z(BString::from("http://test.com/")));
+        let opt_rc = OptField::new(b"RC", Int(123));
+        segment.optional = vec![opt_rc, opt_ur, opt_ij, opt_ab];
         let expected = "S\tseg1\tGCCCTA\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
         let string = segment_string(&segment);
         assert_eq!(string, expected);
@@ -154,7 +153,7 @@ mod tests {
         let path = Path {
             path_name: "path1".into(),
             segment_names: "13+,51-,241+".into(),
-            overlaps: vec![b"8M".to_vec(), b"1M".to_vec(), b"3M".to_vec()],
+            overlaps: vec!["8M".into(), "1M".into(), "3M".into()],
             optional: (),
         };
 
@@ -162,10 +161,9 @@ mod tests {
         assert_eq!(string, "P\tpath1\t13+,51-,241+\t8M,1M,3M");
     }
 
+    /*
     use std::io::Read;
     use std::path::PathBuf;
-
-    /*
     #[test]
     fn print_gfa() {
         let in_gfa =

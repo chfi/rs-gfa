@@ -2,12 +2,60 @@ use bstr::{BStr, BString, ByteSlice, ByteVec};
 
 use crate::optfields::*;
 
+/// This module defines the various GFA line types, the GFA object,
+/// and some utility functions and types
+
+/// Simple representation of a parsed GFA file
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+pub struct GFA<N, T: OptFields> {
+    pub version: Option<String>,
+    pub segments: Vec<Segment<N, T>>,
+    pub links: Vec<Link<N, T>>,
+    pub containments: Vec<Containment<N, T>>,
+    pub paths: Vec<Path<T>>,
+}
+
+/// Consume a GFA object to produce an iterator over all the lines
+/// contained within. The iterator first produces all segments, then
+/// links, then containments, and finally paths.
+pub fn gfa_into_iter<N, T: OptFields>(
+    gfa: GFA<N, T>,
+) -> impl Iterator<Item = Line<N, T>> {
+    use Line::*;
+    let segs = gfa.segments.into_iter().map(Segment);
+    let links = gfa.links.into_iter().map(Link);
+    let conts = gfa.containments.into_iter().map(Containment);
+    let paths = gfa.paths.into_iter().map(Path);
+
+    segs.chain(links).chain(conts).chain(paths)
+}
+
+impl<N: Default, T: OptFields> GFA<N, T> {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+/// Enum containing the different kinds of GFA lines.
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum Line<N, T: OptFields> {
+    Header(Header<T>),
+    Segment(Segment<N, T>),
+    Link(Link<N, T>),
+    Containment(Containment<N, T>),
+    Path(Path<T>),
+    Comment,
+}
+
+/// The header line of a GFA graph
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Header<T: OptFields> {
     pub version: Option<BString>,
     pub optional: T,
 }
 
+/// A segment in a GFA graph. Generic over the name type, but
+/// currently the parser is only defined for N = BString
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Segment<N, T: OptFields> {
     pub name: N,
@@ -22,66 +70,6 @@ impl<T: OptFields> Segment<BString, T> {
             sequence: BString::from(sequence),
             optional: Default::default(),
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum Orientation {
-    Forward,
-    Backward,
-}
-
-// It makes sense for forward to be the default
-impl std::default::Default for Orientation {
-    fn default() -> Orientation {
-        Orientation::Forward
-    }
-}
-
-impl Orientation {
-    pub fn is_reverse(&self) -> bool {
-        match self {
-            Self::Forward => false,
-            Self::Backward => true,
-        }
-    }
-
-    pub fn from_bytes<T: AsRef<[u8]>>(bs: T) -> Option<Self> {
-        match bs.as_ref() {
-            b"+" => Some(Orientation::Forward),
-            b"-" => Some(Orientation::Backward),
-            _ => None,
-        }
-    }
-
-    pub fn from_u8(u: u8) -> Option<Self> {
-        match u {
-            b'+' => Some(Self::Forward),
-            b'-' => Some(Self::Backward),
-            _ => None,
-        }
-    }
-}
-
-impl std::str::FromStr for Orientation {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "+" => Ok(Self::Forward),
-            "-" => Ok(Self::Backward),
-            _ => Err("Could not parse orientation (was not + or -)"),
-        }
-    }
-}
-
-impl std::fmt::Display for Orientation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let sym = match self {
-            Self::Forward => '+',
-            Self::Backward => '-',
-        };
-        write!(f, "{}", sym)
     }
 }
 
@@ -125,6 +113,8 @@ pub struct Containment<N, T: OptFields> {
     pub optional: T,
 }
 
+/// The step list that the path actually consists of is an unparsed
+/// BString to keep memory down
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Path<T: OptFields> {
     pub path_name: BString,
@@ -133,6 +123,7 @@ pub struct Path<T: OptFields> {
     pub optional: T,
 }
 
+/// Parses a segment in a Path's segment_names into a segment name and orientation
 fn parse_path_segment<'a>(input: &'a [u8]) -> (&'a BStr, Orientation) {
     use Orientation::*;
     let last = input.len() - 1;
@@ -146,80 +137,82 @@ fn parse_path_segment<'a>(input: &'a [u8]) -> (&'a BStr, Orientation) {
 }
 
 impl<T: OptFields> Path<T> {
-    /// A parsing iterator over the path's segments
+    /// Produces an iterator over the parsed segments of the given path
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a BStr, Orientation)> {
         self.segment_names.split_str(b",").map(parse_path_segment)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Line<N, T: OptFields> {
-    Header(Header<T>),
-    Segment(Segment<N, T>),
-    Link(Link<N, T>),
-    Containment(Containment<N, T>),
-    Path(Path<T>),
-    Comment,
+/// Represents segment orientation/strand
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum Orientation {
+    Forward,
+    Backward,
 }
 
-pub fn gfa_into_iter<N, T: OptFields>(
-    gfa: GFA<N, T>,
-) -> impl Iterator<Item = Line<N, T>> {
-    use Line::*;
-    let segs = gfa.segments.into_iter().map(Segment);
-    let links = gfa.links.into_iter().map(Link);
-    let conts = gfa.containments.into_iter().map(Containment);
-    let paths = gfa.paths.into_iter().map(Path);
-
-    segs.chain(links).chain(conts).chain(paths)
-}
-
-/// Simple representation of a parsed GFA file
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct GFA<N, T: OptFields> {
-    pub version: Option<String>,
-    pub segments: Vec<Segment<N, T>>,
-    pub links: Vec<Link<N, T>>,
-    pub containments: Vec<Containment<N, T>>,
-    pub paths: Vec<Path<T>>,
-}
-
-impl<N: Default, T: OptFields> GFA<N, T> {
-    pub fn new() -> Self {
-        Default::default()
+// It makes sense for forward to be the default
+impl std::default::Default for Orientation {
+    fn default() -> Orientation {
+        Orientation::Forward
     }
 }
 
-/*
+impl Orientation {
+    pub fn is_reverse(&self) -> bool {
+        match self {
+            Self::Forward => false,
+            Self::Backward => true,
+        }
+    }
+
+    pub fn from_bytes<T: AsRef<[u8]>>(bs: T) -> Option<Self> {
+        match bs.as_ref() {
+            b"+" => Some(Orientation::Forward),
+            b"-" => Some(Orientation::Backward),
+            _ => None,
+        }
+    }
+}
+
+impl std::str::FromStr for Orientation {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "+" => Ok(Self::Forward),
+            "-" => Ok(Self::Backward),
+            _ => Err("Could not parse orientation (was not + or -)"),
+        }
+    }
+}
+
+impl std::fmt::Display for Orientation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let sym = match self {
+            Self::Forward => '+',
+            Self::Backward => '-',
+        };
+        write!(f, "{}", sym)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn create_path() {
-        let name = "path1";
-        let seg_names = vec!["1+", "2-", "13-", "60+"];
-        let overlaps: Vec<_> = vec!["8M", "10M", "0M", "2M"]
-            .into_iter()
-            .map(|s| s.bytes().collect())
-            .collect();
-
-        let path_expected = Path {
-            path_name: name.to_string(),
-            segment_names: vec![
-                (b"1".to_string(), Orientation::Forward),
-                (b"2".to_string(), Orientation::Backward),
-                (b"13".to_string(), Orientation::Backward),
-                (b"60".to_string(), Orientation::Forward),
-            ],
-            overlaps: overlaps.clone(),
+    fn path_iter() {
+        use Orientation::*;
+        let path = Path {
+            path_name: "14".into(),
+            segment_names: "11+,12-,13+".into(),
+            overlaps: vec!["4M".into(), "5M".into()],
             optional: (),
         };
-
-        let path = Path::new(name, seg_names, overlaps);
-
-        assert_eq!(path, path_expected);
+        let mut path_iter = path.iter();
+        assert_eq!(Some(("11".into(), Forward)), path_iter.next());
+        assert_eq!(Some(("12".into(), Backward)), path_iter.next());
+        assert_eq!(Some(("13".into(), Forward)), path_iter.next());
+        assert_eq!(None, path_iter.next());
     }
 }
-
-*/

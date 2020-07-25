@@ -1,8 +1,18 @@
-use bstr::{BStr, BString, ByteSlice, ByteVec};
-use std::collections::HashMap;
+use bstr::{BString, ByteSlice};
 
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
+
+/// These type aliases are useful for configuring the parsers
+pub type OptionalFields = Vec<OptField>;
+pub type NoOptionalFields = ();
+
+/// An optional field a la SAM
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct OptField {
+    pub tag: [u8; 2],
+    pub value: OptFieldVal,
+}
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum OptFieldVal {
@@ -16,16 +26,25 @@ pub enum OptFieldVal {
     BFloat(Vec<f32>),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct OptField {
-    pub tag: [u8; 2],
-    pub value: OptFieldVal,
-}
-
 impl OptField {
+    /// Panics if the provided tag doesn't match the regex [A-Z][A-Za-z]
+    pub fn tag(t: &[u8]) -> [u8; 2] {
+        assert_eq!(t.len(), 2);
+        assert!(t[0].is_ascii_alphabetic());
+        assert!(t[1].is_ascii_alphanumeric());
+        [t[0], t[1]]
+    }
+
+    /// Create a new OptField from a tag name and a value.
+    pub fn new(tag: &[u8], value: OptFieldVal) -> Self {
+        let tag = OptField::tag(tag);
+        OptField { tag, value }
+    }
+
+    /// Parses an optional field from a bytestring in the format
+    /// <TAG>:<TYPE>:<VALUE>
     pub fn parse(input: &[u8]) -> Option<Self> {
         lazy_static! {
-            static ref RE_TYPE: Regex = Regex::new(r"(?-u)[AifZJHB]").unwrap();
             static ref RE_TAG: Regex =
                 Regex::new(r"(?-u)[A-Za-z][A-Za-z0-9]").unwrap();
             static ref RE_CHAR: Regex = Regex::new(r"(?-u)[!-~]").unwrap();
@@ -40,17 +59,14 @@ impl OptField {
         use std::str::from_utf8;
         use OptFieldVal::*;
 
-        let mut fields = input.split_str(b":");
+        let o_tag = &input[0..=1];
 
-        // let o_tag = fields.next().and_then(OptTag::from_bytes)?;
-        let o_tag = fields.next()?;
+        let o_type = input[3];
+        if !b"AifZJHB".contains(&o_type) {
+            return None;
+        }
 
-        let o_type = fields
-            .next()
-            .and_then(|s| RE_TYPE.find(s))
-            .map(|s| s.as_bytes()[0])?;
-
-        let o_contents = fields.next()?;
+        let o_contents = &input[5..];
 
         let o_val = match o_type {
             // char
@@ -101,13 +117,11 @@ impl OptField {
             ),
         }?;
 
-        Some(OptField {
-            tag: [o_tag[0], o_tag[1]],
-            value: o_val,
-        })
+        Some(Self::new(o_tag, o_val))
     }
 }
 
+/// The Display implementation output that can be parsed back to OptField
 impl std::fmt::Display for OptField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use OptFieldVal::*;
@@ -115,7 +129,7 @@ impl std::fmt::Display for OptField {
         write!(f, "{}{}:", char::from(self.tag[0]), char::from(self.tag[1]))?;
 
         match &self.value {
-            A(x) => write!(f, "A:{}", x),
+            A(x) => write!(f, "A:{}", char::from(*x)),
             Int(x) => write!(f, "i:{}", x),
             Float(x) => write!(f, "f:{}", x),
             Z(x) => write!(f, "Z:{}", x),
@@ -145,20 +159,24 @@ impl std::fmt::Display for OptField {
     }
 }
 
-pub type OptionalFields = Vec<OptField>;
-
-// parse_optionals returns Self, not Option, since, well, they're optional anyway
+/// OptFields describes how to parse, store, and query optional fields
 pub trait OptFields: Sized + Default {
+    /// Return the optional field with the given tag, if it exists.
     fn get_field(&self, tag: &[u8]) -> Option<&OptField>;
 
+    /// Return all optional fields.
     fn fields(&self) -> &[OptField];
 
+    /// Given a sequence of bytestrings, parse them as optional fields
+    /// to create a collection
     fn parse<T>(input: T) -> Self
     where
         T: IntoIterator,
         T::Item: AsRef<[u8]>;
 }
 
+/// This implementation is useful for performance if we don't actually
+/// need any optional fields
 impl OptFields for () {
     fn get_field(&self, _: &[u8]) -> Option<&OptField> {
         None
@@ -177,6 +195,7 @@ impl OptFields for () {
     }
 }
 
+/// Stores all the optional fields in a vector
 impl OptFields for Vec<OptField> {
     fn get_field(&self, tag: &[u8]) -> Option<&OptField> {
         self.iter().find(|o| o.tag == tag).map(|v| v)
