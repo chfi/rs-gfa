@@ -1,4 +1,5 @@
 use bstr::{BStr, BString, ByteSlice};
+use serde::{Deserialize, Serialize};
 
 use crate::optfields::*;
 
@@ -55,7 +56,9 @@ pub struct Header<T: OptFields> {
 
 /// A segment in a GFA graph. Generic over the name type, but
 /// currently the parser is only defined for N = BString
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+)]
 pub struct Segment<N, T: OptFields> {
     pub name: N,
     pub sequence: BString,
@@ -72,7 +75,9 @@ impl<T: OptFields> Segment<BString, T> {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+)]
 pub struct Link<N, T: OptFields> {
     pub from_segment: N,
     pub from_orient: Orientation,
@@ -101,7 +106,9 @@ impl<T: OptFields> Link<BString, T> {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+)]
 pub struct Containment<N, T: OptFields> {
     pub container_name: N,
     pub container_orient: Orientation,
@@ -114,7 +121,9 @@ pub struct Containment<N, T: OptFields> {
 
 /// The step list that the path actually consists of is an unparsed
 /// BString to keep memory down
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+)]
 pub struct Path<T: OptFields> {
     pub path_name: BString,
     pub segment_names: BString,
@@ -143,7 +152,7 @@ impl<T: OptFields> Path<T> {
 }
 
 /// Represents segment orientation/strand
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Orientation {
     Forward,
     Backward,
