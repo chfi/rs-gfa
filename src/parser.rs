@@ -348,8 +348,6 @@ mod tests {
 
         let result: Option<Header<()>> = ParseGFA::parse_line([hdr].iter());
 
-        println!("{:?}", result);
-
         match result {
             None => {
                 panic!("Error parsing header");
