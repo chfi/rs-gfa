@@ -1,6 +1,6 @@
 [package]
 name = "gfa"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["christian@chfi.se"]
 edition = "2018"
 license = "MIT"
@@ -14,9 +14,6 @@ categories = ["science"]
 lazy_static = "1.4.0"
 regex = "1"
 bstr = "0.2"
-
-[dependencies.nom]
-version = "^5"
 
 [dev-dependencies]
 criterion = "0.3"
