@@ -1,10 +1,10 @@
 use crate::gfa::*;
 use crate::optfields::*;
-use bstr::{BStr, BString, ByteSlice, ByteVec};
+use bstr::BString;
 use std::fmt::Display;
 use std::fmt::Write;
 
-pub fn write_optional_fields<U: OptFields, T: Write>(opts: &U, stream: &mut T) {
+fn write_optional_fields<U: OptFields, T: Write>(opts: &U, stream: &mut T) {
     for field in opts.fields() {
         write!(stream, "\t{}", field).unwrap_or_else(|err| {
             panic!(
@@ -15,16 +15,17 @@ pub fn write_optional_fields<U: OptFields, T: Write>(opts: &U, stream: &mut T) {
     }
 }
 
-pub fn write_header<T: Write>(version: &Option<String>, stream: &mut T) {
+fn write_header<U: OptFields, T: Write>(header: &Header<U>, stream: &mut T) {
     write!(stream, "H").unwrap();
-    if let Some(v) = version {
+    if let Some(v) = &header.version {
         write!(stream, "\tVN:Z:{}", v).unwrap();
     }
+    write_optional_fields(&header.optional, stream);
 }
 
 // Write segment
-pub fn write_segment<N: Display, T: Write>(
-    seg: &Segment<N, OptionalFields>,
+fn write_segment<N: Display, T: Write, U: OptFields>(
+    seg: &Segment<N, U>,
     stream: &mut T,
 ) {
     write!(stream, "S\t{}\t{}", seg.name, seg.sequence)
@@ -33,15 +34,9 @@ pub fn write_segment<N: Display, T: Write>(
     write_optional_fields(&seg.optional, stream);
 }
 
-pub fn segment_string<N: Display>(seg: &Segment<N, OptionalFields>) -> String {
-    let mut result = String::new();
-    write_segment(seg, &mut result);
-    result
-}
-
 // Write link
-pub fn write_link<N: Display, T: Write>(
-    link: &Link<N, OptionalFields>,
+fn write_link<N: Display, T: Write, U: OptFields>(
+    link: &Link<N, U>,
     stream: &mut T,
 ) {
     write!(
@@ -58,14 +53,8 @@ pub fn write_link<N: Display, T: Write>(
     write_optional_fields(&link.optional, stream);
 }
 
-pub fn link_string<N: Display>(link: &Link<N, OptionalFields>) -> String {
-    let mut result = String::new();
-    write_link(link, &mut result);
-    result
-}
-
 // Write path
-pub fn write_path<U: OptFields, T: Write>(path: &Path<U>, stream: &mut T) {
+fn write_path<U: OptFields, T: Write>(path: &Path<U>, stream: &mut T) {
     write!(stream, "P\t{}\t", path.path_name)
         .expect("Error writing path to stream");
 
@@ -81,18 +70,12 @@ pub fn write_path<U: OptFields, T: Write>(path: &Path<U>, stream: &mut T) {
     write_optional_fields(&path.optional, stream);
 }
 
-pub fn path_string<T: OptFields>(path: &Path<T>) -> String {
-    let mut result = String::new();
-    write_path(path, &mut result);
-    result
-}
-
 // Write GFA
-pub fn write_gfa<N: Display, T: Write>(
-    gfa: &GFA<N, OptionalFields>,
+pub fn write_gfa<N: Display, T: Write, U: OptFields>(
+    gfa: &GFA<N, U>,
     stream: &mut T,
 ) {
-    write_header(&gfa.version, stream);
+    write_header(&gfa.header, stream);
     writeln!(stream).unwrap();
     gfa.segments.iter().for_each(|s| {
         write_segment(s, stream);
@@ -124,27 +107,30 @@ mod tests {
     #[test]
     fn print_segment() {
         use OptFieldVal::*;
-        let mut segment = Segment::new(b"seg1", b"GCCCTA");
+        let mut segment: Segment<BString, OptionalFields> =
+            Segment::new(b"seg1", b"GCCCTA");
         let opt_ij = OptField::new(b"IJ", A(b'x'));
         let opt_ab = OptField::new(b"AB", BInt(vec![1, 2, 3, 52124]));
         let opt_ur = OptField::new(b"UR", Z(BString::from("http://test.com/")));
         let opt_rc = OptField::new(b"RC", Int(123));
         segment.optional = vec![opt_rc, opt_ur, opt_ij, opt_ab];
         let expected = "S\tseg1\tGCCCTA\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
-        let string = segment_string(&segment);
+        let mut string = String::new();
+        write_segment(&segment, &mut string);
         assert_eq!(string, expected);
     }
 
     #[test]
     fn print_link() {
-        let link = Link::new(
+        let link: Link<BString, ()> = Link::new(
             b"13",
             Orientation::Forward,
             b"552",
             Orientation::Backward,
             b"0M",
         );
-        let string = link_string(&link);
+        let mut string = String::new();
+        write_link(&link, &mut string);
         assert_eq!(string, "L\t13\t+\t552\t-\t0M");
     }
 
@@ -157,25 +143,27 @@ mod tests {
             optional: (),
         };
 
-        let string = path_string(&path);
+        let mut string = String::new();
+        write_path(&path, &mut string);
         assert_eq!(string, "P\tpath1\t13+,51-,241+\t8M,1M,3M");
     }
 
-    /*
-    use std::io::Read;
-    use std::path::PathBuf;
     #[test]
     fn print_gfa() {
-        let in_gfa =
-            crate::parser::parse_gfa(&PathBuf::from("./lil.gfa")).unwrap();
+        use std::io::Read;
+        use std::path::PathBuf;
+
+        let parser = crate::parser::GFAParser::new();
+        let in_gfa: GFA<BString, ()> = parser.parse_file("./lil.gfa").unwrap();
+
         let mut file =
             std::fs::File::open(&PathBuf::from("./lil.gfa")).unwrap();
         let mut file_string = String::new();
         file.read_to_string(&mut file_string).unwrap();
 
-        let string = gfa_string(&in_gfa);
+        let mut string = String::new();
+        write_gfa(&in_gfa, &mut string);
 
         assert_eq!(string, file_string);
     }
-    */
 }

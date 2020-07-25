@@ -24,10 +24,6 @@ criterion = "0.3"
 [lib]
 bench = false
 
-[[bin]]
-name = "gfa"
-bench = false
-
 [[bench]]
 name = "parsing_benchmark"
 harness = false

@@ -43,6 +43,7 @@ impl<T: OptFields> GFAParser<T> {
         let mut gfa = GFA::new();
         for line in input {
             match self.parse_line(line.as_ref()) {
+                Some(Header(h)) => gfa.header = h,
                 Some(Segment(s)) => gfa.segments.push(s),
                 Some(Link(s)) => gfa.links.push(s),
                 Some(Containment(s)) => gfa.containments.push(s),
@@ -74,7 +75,7 @@ impl<T: OptFields> GFAParser<T> {
         }
     }
 
-    pub fn parse_file<'a, P: Into<&'a std::path::Path>>(
+    pub fn parse_file<'a, P: AsRef<std::path::Path>>(
         &self,
         path: P,
     ) -> std::io::Result<GFA<BString, T>> {
@@ -84,7 +85,7 @@ impl<T: OptFields> GFAParser<T> {
             std::{fs::File, io::BufReader},
         };
 
-        let file = File::open(path.into())?;
+        let file = File::open(path.as_ref())?;
         let lines = BufReader::new(file).byte_lines();
 
         let mut gfa = GFA::new();
@@ -92,6 +93,7 @@ impl<T: OptFields> GFAParser<T> {
         for line in lines {
             let line = line?;
             match self.parse_line(line.as_ref()) {
+                Some(Header(h)) => gfa.header = h,
                 Some(Segment(s)) => gfa.segments.push(s),
                 Some(Link(s)) => gfa.links.push(s),
                 Some(Containment(s)) => gfa.containments.push(s),
@@ -182,7 +184,6 @@ impl<T: OptFields> ParseGFA for Header<T> {
     {
         let next = input.next()?;
         let version = OptField::parse(next.as_ref())?;
-
         let optional = T::parse(input);
 
         if let OptFieldVal::Z(version) = version.value {
@@ -339,6 +340,8 @@ mod tests {
 
         let result: Option<Header<()>> = ParseGFA::parse_line([hdr].iter());
 
+        println!("{:?}", result);
+
         match result {
             None => {
                 panic!("Error parsing header");
@@ -416,67 +419,24 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn parse_gfa_file() {
-    // }
-
-    /*
     #[test]
-    fn can_parse_gfa_file() {
-        let gfa = parse_gfa::<()>(&PathBuf::from("./lil.gfa"));
+    fn can_parse_gfa_lines() {
+        let parser = GFAParser::new();
+        let gfa: GFA<BString, ()> = parser.parse_file("./lil.gfa").unwrap();
 
-        match gfa {
-            None => panic!("Error parsing GFA file"),
-            Some(g) => {
-                let num_segs = g.segments.len();
-                let num_links = g.links.len();
-                let num_paths = g.paths.len();
-                let num_conts = g.containments.len();
+        let num_segs = gfa.segments.len();
+        let num_links = gfa.links.len();
+        let num_paths = gfa.paths.len();
+        let num_conts = gfa.containments.len();
 
-                assert_eq!(num_segs, 15);
-                assert_eq!(num_links, 20);
-                assert_eq!(num_conts, 0);
-                assert_eq!(num_paths, 3);
-            }
-        }
+        assert_eq!(num_segs, 15);
+        assert_eq!(num_links, 20);
+        assert_eq!(num_conts, 0);
+        assert_eq!(num_paths, 3);
     }
-    */
-
-    /*
-    #[test]
-    fn can_stream_gfa_lines() {
-        let file = File::open(&PathBuf::from("./lil.gfa")).unwrap();
-
-        let reader = BufReader::new(file);
-        let mut lines = reader.lines();
-
-        let mut gfa_lines = parse_gfa_stream(&mut lines);
-
-        assert_eq!(
-            gfa_lines.next(),
-            Some(Line::Header(Header {
-                version: Some("1.0".to_string())
-            }))
-        );
-
-        assert_eq!(
-            gfa_lines.next(),
-            Some(Line::Segment(Segment::new("1", "CAAATAAG")))
-        );
-        assert_eq!(
-            gfa_lines.next(),
-            Some(Line::Segment(Segment::new("2", "A")))
-        );
-
-        assert_eq!(
-            gfa_lines.next(),
-            Some(Line::Segment(Segment::new("3", "G")))
-        );
-    }
-    */
 
     #[test]
-    fn new_parsers_work() {
+    fn segment_parser() {
         use OptFieldVal::*;
         let name = "11";
         let seq = "ACCTT";
@@ -495,10 +455,7 @@ mod tests {
             OptField::new(b"AB", BInt(vec![1, 2, 3, 52124])),
         ]
         .into_iter()
-        // .map(|(a, b)| OptionalField::new(a, b))
         .collect();
-
-        // Ignoring optional fields works
 
         let segment_1: Option<Segment<BString, ()>> =
             ParseGFA::parse_line(fields.clone());

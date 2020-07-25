@@ -8,7 +8,7 @@ use crate::optfields::*;
 /// Simple representation of a parsed GFA file
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct GFA<N, T: OptFields> {
-    pub version: Option<String>,
+    pub header: Header<T>,
     pub segments: Vec<Segment<N, T>>,
     pub links: Vec<Link<N, T>>,
     pub containments: Vec<Containment<N, T>>,
@@ -44,7 +44,6 @@ pub enum Line<N, T: OptFields> {
     Link(Link<N, T>),
     Containment(Containment<N, T>),
     Path(Path<T>),
-    Comment,
 }
 
 /// The header line of a GFA graph
