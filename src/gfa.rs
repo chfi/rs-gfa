@@ -1,4 +1,4 @@
-use bstr::{BStr, BString, ByteSlice, ByteVec};
+use bstr::{BStr, BString, ByteSlice};
 
 use crate::optfields::*;
 

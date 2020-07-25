@@ -1,10 +1,4 @@
-use bstr::io::*;
-use bstr::{BStr, BString, ByteSlice, ByteVec};
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::{BufReader, Lines};
-use std::path::PathBuf;
-
+use bstr::{BStr, BString, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
@@ -18,7 +12,11 @@ pub struct GFAParser<T: OptFields> {
 }
 
 impl<T: OptFields> GFAParser<T> {
-    pub fn new(config: GFAParsingConfig) -> Self {
+    pub fn new() -> Self {
+        Self::with_config(GFAParsingConfig::all())
+    }
+
+    pub fn with_config(config: GFAParsingConfig) -> Self {
         let filter = config.make_filter();
         GFAParser {
             filter,
@@ -26,6 +24,8 @@ impl<T: OptFields> GFAParser<T> {
         }
     }
 
+    /// Filters a line before parsing, only passing through the lines
+    /// enabled in the config used to make this parser
     fn filter_line<'a>(&self, line: &'a BStr) -> Option<&'a BStr> {
         (self.filter)(line)
     }
@@ -37,7 +37,7 @@ impl<T: OptFields> GFAParser<T> {
     pub fn parse_all<I>(&self, input: I) -> GFA<BString, T>
     where
         I: Iterator,
-        I::Item: AsRef<BStr>,
+        I::Item: AsRef<[u8]>,
     {
         use Line::*;
         let mut gfa = GFA::new();
@@ -55,8 +55,9 @@ impl<T: OptFields> GFAParser<T> {
     }
 
     /// Parse a single line into a GFA line
-    pub fn parse_line(&self, line: &BStr) -> Option<Line<BString, T>> {
+    pub fn parse_line(&self, line: &[u8]) -> Option<Line<BString, T>> {
         use Line::*;
+        let line: &BStr = line.as_ref();
         if let Some(line) = self.filter_line(line) {
             let mut fields = line.split_str(b"\t");
             let hdr = fields.next()?;
@@ -71,6 +72,35 @@ impl<T: OptFields> GFAParser<T> {
         } else {
             None
         }
+    }
+
+    pub fn parse_file<'a, P: Into<&'a std::path::Path>>(
+        &self,
+        path: P,
+    ) -> std::io::Result<GFA<BString, T>> {
+        use Line::*;
+        use {
+            bstr::io::BufReadExt,
+            std::{fs::File, io::BufReader},
+        };
+
+        let file = File::open(path.into())?;
+        let lines = BufReader::new(file).byte_lines();
+
+        let mut gfa = GFA::new();
+
+        for line in lines {
+            let line = line?;
+            match self.parse_line(line.as_ref()) {
+                Some(Segment(s)) => gfa.segments.push(s),
+                Some(Link(s)) => gfa.links.push(s),
+                Some(Containment(s)) => gfa.containments.push(s),
+                Some(Path(s)) => gfa.paths.push(s),
+                _ => (),
+            }
+        }
+
+        Ok(gfa)
     }
 }
 
