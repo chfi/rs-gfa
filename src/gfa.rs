@@ -123,7 +123,7 @@ pub struct Path<T: OptFields> {
 }
 
 /// Parses a segment in a Path's segment_names into a segment name and orientation
-fn parse_path_segment<'a>(input: &'a [u8]) -> (&'a BStr, Orientation) {
+fn parse_path_segment(input: &[u8]) -> (&'_ BStr, Orientation) {
     use Orientation::*;
     let last = input.len() - 1;
     let orient = match input[last] {
@@ -137,7 +137,7 @@ fn parse_path_segment<'a>(input: &'a [u8]) -> (&'a BStr, Orientation) {
 
 impl<T: OptFields> Path<T> {
     /// Produces an iterator over the parsed segments of the given path
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a BStr, Orientation)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&'_ BStr, Orientation)> {
         self.segment_names.split_str(b",").map(parse_path_segment)
     }
 }
@@ -150,7 +150,7 @@ pub enum Orientation {
 }
 
 // It makes sense for forward to be the default
-impl std::default::Default for Orientation {
+impl Default for Orientation {
     fn default() -> Orientation {
         Orientation::Forward
     }

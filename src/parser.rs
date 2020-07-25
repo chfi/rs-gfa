@@ -5,15 +5,23 @@ use regex::bytes::Regex;
 use crate::gfa::*;
 use crate::optfields::*;
 
+type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
+
 /// GFAParser encapsulates a parsing configuration
 pub struct GFAParser<T: OptFields> {
-    filter: Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>,
+    filter: GFALineFilter,
     _optional_fields: std::marker::PhantomData<T>,
+}
+
+impl<T: OptFields> Default for GFAParser<T> {
+    fn default() -> Self {
+        Self::with_config(GFAParsingConfig::all())
+    }
 }
 
 impl<T: OptFields> GFAParser<T> {
     pub fn new() -> Self {
-        Self::with_config(GFAParsingConfig::all())
+        Default::default()
     }
 
     pub fn with_config(config: GFAParsingConfig) -> Self {
@@ -75,7 +83,7 @@ impl<T: OptFields> GFAParser<T> {
         }
     }
 
-    pub fn parse_file<'a, P: AsRef<std::path::Path>>(
+    pub fn parse_file<P: AsRef<std::path::Path>>(
         &self,
         path: P,
     ) -> std::io::Result<GFA<BString, T>> {
@@ -144,7 +152,7 @@ impl GFAParsingConfig {
         }
     }
 
-    fn make_filter(&self) -> Box<dyn for<'a> Fn(&'a BStr) -> Option<&'a BStr>> {
+    fn make_filter(&self) -> GFALineFilter {
         let mut filter_string = BString::from("H");
         if self.segments {
             filter_string.push(b'S');

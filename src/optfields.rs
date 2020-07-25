@@ -191,7 +191,6 @@ impl OptFields for () {
         T: IntoIterator,
         T::Item: AsRef<[u8]>,
     {
-        ()
     }
 }
 
