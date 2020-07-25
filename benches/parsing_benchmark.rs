@@ -1,58 +1,31 @@
 use std::fs::File;
 use std::io;
-use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use bstr::io::*;
+use bstr::BString;
+
 use gfa::gfa::*;
+use gfa::optfields::*;
 use gfa::parser::*;
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion,
-};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
-struct GFARaw {
-    segments: Vec<String>,
-    links: Vec<String>,
-    paths: Vec<String>,
-}
-
-fn read_raw(path: &PathBuf) -> io::Result<Vec<String>> {
+fn load_lines(path: &PathBuf) -> io::Result<Vec<Vec<u8>>> {
     let file = File::open(path)?;
-    let lines = &mut BufReader::new(file).lines();
-
+    let lines = BufReader::new(file).byte_lines();
     let result = lines.map(|l| l.unwrap()).collect();
-
     Ok(result)
 }
 
-fn split_lines(lines: Vec<String>) -> GFARaw {
-    let mut gfa = GFARaw {
-        segments: Vec::new(),
-        links: Vec::new(),
-        paths: Vec::new(),
-    };
+fn parse_lines<T: OptFields>(input: &[Vec<u8>]) -> GFA<BString, T> {
+    let parser: GFAParser<T> = GFAParser::new();
 
-    for l in lines {
-        let l: String = l;
-        match l.get(0..=1) {
-            Some("S") => gfa.segments.push(l),
-            Some("L") => gfa.links.push(l),
-            Some("P") => gfa.paths.push(l),
-            _ => (),
-        }
-    }
-
-    gfa
-}
-
-fn parse_lines_old<T: OptFields>(input: &[String]) -> GFA<T> {
-    let conf = GFAParsingConfig::all();
-    let parse = |l| parse_gfa_line(l, &conf);
-    let mut gfa: GFA<T> = GFA::new();
+    let mut gfa: GFA<BString, T> = GFA::new();
 
     for line in input.iter() {
-        match parse(line) {
+        match parser.parse_line(line[..].as_ref()) {
             Some(Line::Segment(s)) => gfa.segments.push(s),
             Some(Line::Link(l)) => gfa.links.push(l),
             Some(Line::Containment(c)) => gfa.containments.push(c),
@@ -64,30 +37,11 @@ fn parse_lines_old<T: OptFields>(input: &[String]) -> GFA<T> {
     gfa
 }
 
-fn parse_lines<T: OptFields>(input: &[String]) -> GFA<T> {
-    let conf = GFAParsingConfig::all();
-    let parser: GFAParser<T> = GFAParser::new(conf);
-
-    let mut gfa: GFA<T> = GFA::new();
-
-    for line in input.iter() {
-        match parser.parse_line(line) {
-            Some(Line::Segment(s)) => gfa.segments.push(s),
-            Some(Line::Link(l)) => gfa.links.push(l),
-            Some(Line::Containment(c)) => gfa.containments.push(c),
-            Some(Line::Path(p)) => gfa.paths.push(p),
-            _ => (),
-        }
-    }
-
-    gfa
-}
-
-fn parse_lines_noopt(input: &[String]) -> GFA<()> {
+fn parse_lines_noopt(input: &[Vec<u8>]) -> GFA<BString, ()> {
     parse_lines(input)
 }
 
-fn parse_lines_withopt(input: &[String]) -> GFA<OptionalFields> {
+fn parse_lines_withopt(input: &[Vec<u8>]) -> GFA<BString, OptionalFields> {
     parse_lines(input)
 }
 
@@ -98,7 +52,7 @@ macro_rules! bench_gfa {
         fn $name(c: &mut Criterion) {
             let mut path = PathBuf::from(GFAPATH);
             path.push($gfa);
-            let lines: Vec<String> = read_raw(&path).unwrap();
+            let lines: Vec<Vec<u8>> = load_lines(&path).unwrap();
             c.bench_with_input(BenchmarkId::new($id, $gfa), &lines, |b, l| {
                 b.iter(|| $parser(&l));
             });
