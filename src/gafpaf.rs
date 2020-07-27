@@ -1,4 +1,4 @@
-use bstr::BString;
+use bstr::{BStr, BString, ByteSlice, ByteVec};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 use std::ops::Range;
@@ -135,4 +135,118 @@ where
         quality: paf.quality,
         optional: paf.optional,
     })
+}
+
+#[repr(u8)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CIGAROp {
+    M = 0,
+    I = 1,
+    D = 2,
+    N = 3,
+    S = 4,
+    H = 5,
+    P = 6,
+    E = 7,
+    X = 8,
+}
+
+impl CIGAROp {
+    fn from_u8(byte: u8) -> Option<CIGAROp> {
+        match byte {
+            b'M' => Some(CIGAROp::M),
+            b'I' => Some(CIGAROp::I),
+            b'D' => Some(CIGAROp::D),
+            b'N' => Some(CIGAROp::N),
+            b'S' => Some(CIGAROp::S),
+            b'H' => Some(CIGAROp::H),
+            b'P' => Some(CIGAROp::P),
+            b'=' => Some(CIGAROp::E),
+            b'X' => Some(CIGAROp::X),
+            _ => None,
+        }
+    }
+}
+
+impl std::str::FromStr for CIGAROp {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "M" => Ok(CIGAROp::M),
+            "I" => Ok(CIGAROp::I),
+            "D" => Ok(CIGAROp::D),
+            "N" => Ok(CIGAROp::N),
+            "S" => Ok(CIGAROp::S),
+            "H" => Ok(CIGAROp::H),
+            "P" => Ok(CIGAROp::P),
+            "=" => Ok(CIGAROp::E),
+            "X" => Ok(CIGAROp::X),
+            _ => Err("Could not parse CIGAR operation"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CIGAR(pub Vec<(CIGAROp, u32)>);
+
+impl CIGAR {
+    fn parse_first(bytes: &[u8]) -> Option<((CIGAROp, u32), &[u8])> {
+        if bytes[0].is_ascii_digit() {
+            let op_ix = bytes.find_byteset(b"MIDNSHP=X")?;
+            let num = std::str::from_utf8(&bytes[0..op_ix]).ok()?;
+            let num: u32 = num.parse().ok()?;
+            let op = CIGAROp::from_u8(bytes[op_ix])?;
+            let rest = &bytes[op_ix + 1..];
+            Some(((op, num), rest))
+        } else {
+            None
+        }
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.is_empty() {
+            return None;
+        }
+        let mut cigar: Vec<(CIGAROp, u32)> = Vec::new();
+        let mut bytes = bytes;
+        while bytes.len() > 0 {
+            let (cg, rest) = Self::parse_first(bytes)?;
+            cigar.push(cg);
+            bytes = rest;
+        }
+
+        Some(CIGAR(cigar))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cigar_parser() {
+        use CIGAROp::*;
+
+        let input = b"20M12D3M4N9S10H5P11=9X";
+        let cigar = CIGAR::from_bytes(input);
+        assert_eq!(
+            Some(CIGAR(vec![
+                (M, 20),
+                (D, 12),
+                (M, 3),
+                (N, 4),
+                (S, 9),
+                (H, 10),
+                (P, 5),
+                (E, 11),
+                (X, 9)
+            ])),
+            cigar
+        );
+
+        assert_eq!(None, CIGAR::from_bytes(b"M20"));
+        assert_eq!(None, CIGAR::from_bytes(b"20"));
+        assert_eq!(None, CIGAR::from_bytes(b""));
+    }
 }
