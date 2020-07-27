@@ -151,6 +151,25 @@ pub enum CIGAROp {
     X = 8,
 }
 
+impl std::fmt::Display for CIGAROp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use CIGAROp::*;
+        let sym = match self {
+            M => 'M',
+            I => 'I',
+            D => 'D',
+            N => 'N',
+            S => 'S',
+            H => 'H',
+            P => 'P',
+            E => '=',
+            X => 'X',
+        };
+
+        write!(f, "{}", sym)
+    }
+}
+
 impl CIGAROp {
     fn from_u8(byte: u8) -> Option<CIGAROp> {
         match byte {
@@ -220,9 +239,27 @@ impl CIGAR {
     }
 }
 
+impl std::fmt::Display for CIGAR {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (op, len) in self.0.iter() {
+            write!(f, "{}{}", len, op)?
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cigar_display() {
+        let input = b"20M12D3M4N9S10H5P11=9X";
+        let input_str = std::str::from_utf8(input).unwrap();
+        let cigar = CIGAR::from_bytes(input).unwrap();
+        let cigstr = cigar.to_string();
+        assert_eq!(input_str, cigstr);
+    }
 
     #[test]
     fn cigar_parser() {
