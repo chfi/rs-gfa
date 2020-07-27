@@ -16,6 +16,19 @@ pub struct GFA<N, T: OptFields> {
     pub paths: Vec<Path<T>>,
 }
 
+impl<N, T: OptFields> GFA<N, T> {
+    pub fn insert_line(&mut self, line: Line<N, T>) {
+        use Line::*;
+        match line {
+            Header(h) => self.header = h,
+            Segment(s) => self.segments.push(s),
+            Link(s) => self.links.push(s),
+            Containment(s) => self.containments.push(s),
+            Path(s) => self.paths.push(s),
+        }
+    }
+}
+
 /// Consume a GFA object to produce an iterator over all the lines
 /// contained within. The iterator first produces all segments, then
 /// links, then containments, and finally paths.
@@ -165,12 +178,18 @@ impl Default for Orientation {
     }
 }
 
+impl From<Orientation> for bool {
+    fn from(o: Orientation) -> bool {
+        match o {
+            Orientation::Forward => true,
+            Orientation::Backward => false,
+        }
+    }
+}
+
 impl Orientation {
     pub fn is_reverse(&self) -> bool {
-        match self {
-            Self::Forward => false,
-            Self::Backward => true,
-        }
+        !bool::from(*self)
     }
 
     pub fn from_bytes<T: AsRef<[u8]>>(bs: T) -> Option<Self> {

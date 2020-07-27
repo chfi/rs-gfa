@@ -47,19 +47,12 @@ impl<T: OptFields> GFAParser<T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        use Line::*;
         let mut gfa = GFA::new();
         for line in input {
-            match self.parse_line(line.as_ref()) {
-                Some(Header(h)) => gfa.header = h,
-                Some(Segment(s)) => gfa.segments.push(s),
-                Some(Link(s)) => gfa.links.push(s),
-                Some(Containment(s)) => gfa.containments.push(s),
-                Some(Path(s)) => gfa.paths.push(s),
-                _ => (),
+            if let Some(line) = self.parse_line(line.as_ref()) {
+                gfa.insert_line(line)
             }
         }
-
         gfa
     }
 
@@ -87,7 +80,6 @@ impl<T: OptFields> GFAParser<T> {
         &self,
         path: P,
     ) -> std::io::Result<GFA<BString, T>> {
-        use Line::*;
         use {
             bstr::io::BufReadExt,
             std::{fs::File, io::BufReader},
@@ -100,13 +92,8 @@ impl<T: OptFields> GFAParser<T> {
 
         for line in lines {
             let line = line?;
-            match self.parse_line(line.as_ref()) {
-                Some(Header(h)) => gfa.header = h,
-                Some(Segment(s)) => gfa.segments.push(s),
-                Some(Link(s)) => gfa.links.push(s),
-                Some(Containment(s)) => gfa.containments.push(s),
-                Some(Path(s)) => gfa.paths.push(s),
-                _ => (),
+            if let Some(line) = self.parse_line(line.as_ref()) {
+                gfa.insert_line(line);
             }
         }
 
