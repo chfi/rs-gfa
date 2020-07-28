@@ -40,6 +40,42 @@ impl<T: OptFields> GFAParser<T> {
 }
 
 impl<T: OptFields> GFAParser<T> {
+    /*
+    /// Parses GFA lines, treating all segment names as usizes. Fails
+    /// if any segment name cannot be parsed as a usize.
+    pub fn parse_usize<I>(&self, input: I) -> Option<GFA<usize, T>>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        let parsed = |bs: &[u8]| {
+            let string = std::str::from_utf8(bs).ok()?;
+            string.parse::<usize>().ok()
+        };
+
+        let mut gfa = GFA::new();
+        use Line::*;
+        // let line: &BStr = line.as_ref();
+        for line in input {
+            let p_line = self.parse_line(line.as_ref())?;
+            match p_line {
+                Header(h) => self.header = h,
+                Segment(s) => {
+                    let name = parsed(s.name)?;
+
+                    let name = s.
+                    let seg =
+                    self.segments.push(s)
+                },
+                Link(s) => {self.links.push(s)},
+                Containment(s) => {self.containments.push(s)},
+                Path(s) => {self.paths.push(s)},
+            }
+        }
+
+    }
+    */
+
     /// Consume a line-by-line iterator of bytestrings to produce a
     /// GFA object
     pub fn parse_all<I>(&self, input: I) -> GFA<BString, T>
