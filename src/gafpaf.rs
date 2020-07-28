@@ -22,6 +22,16 @@ pub struct GAF<T: OptFields> {
     pub optional: T,
 }
 
+pub enum GAFStep {
+    SegIntv(BString, Orientation),
+    StableIntv(BString, Range<usize>),
+}
+
+pub enum GAFPath {
+    StableId(BString),
+    OrientIntv(Vec<GAFStep>),
+}
+
 #[derive(Debug)]
 pub struct PAF<T: OptFields> {
     pub query_seq_name: BString,
@@ -138,7 +148,7 @@ where
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CIGAROp {
     M = 0,
     I = 1,
@@ -151,39 +161,43 @@ pub enum CIGAROp {
     X = 8,
 }
 
-impl std::fmt::Display for CIGAROp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl CIGAROp {
+    fn to_u8(self) -> u8 {
         use CIGAROp::*;
-        let sym = match self {
-            M => 'M',
-            I => 'I',
-            D => 'D',
-            N => 'N',
-            S => 'S',
-            H => 'H',
-            P => 'P',
-            E => '=',
-            X => 'X',
-        };
+        match self {
+            M => b'M',
+            I => b'I',
+            D => b'D',
+            N => b'N',
+            S => b'S',
+            H => b'H',
+            P => b'P',
+            E => b'=',
+            X => b'X',
+        }
+    }
 
-        write!(f, "{}", sym)
+    fn from_u8(byte: u8) -> Option<CIGAROp> {
+        use CIGAROp::*;
+        match byte {
+            b'M' => Some(M),
+            b'I' => Some(I),
+            b'D' => Some(D),
+            b'N' => Some(N),
+            b'S' => Some(S),
+            b'H' => Some(H),
+            b'P' => Some(P),
+            b'=' => Some(E),
+            b'X' => Some(X),
+            _ => None,
+        }
     }
 }
 
-impl CIGAROp {
-    fn from_u8(byte: u8) -> Option<CIGAROp> {
-        match byte {
-            b'M' => Some(CIGAROp::M),
-            b'I' => Some(CIGAROp::I),
-            b'D' => Some(CIGAROp::D),
-            b'N' => Some(CIGAROp::N),
-            b'S' => Some(CIGAROp::S),
-            b'H' => Some(CIGAROp::H),
-            b'P' => Some(CIGAROp::P),
-            b'=' => Some(CIGAROp::E),
-            b'X' => Some(CIGAROp::X),
-            _ => None,
-        }
+impl std::fmt::Display for CIGAROp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let sym = char::from(self.to_u8());
+        write!(f, "{}", sym)
     }
 }
 
@@ -191,18 +205,11 @@ impl std::str::FromStr for CIGAROp {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "M" => Ok(CIGAROp::M),
-            "I" => Ok(CIGAROp::I),
-            "D" => Ok(CIGAROp::D),
-            "N" => Ok(CIGAROp::N),
-            "S" => Ok(CIGAROp::S),
-            "H" => Ok(CIGAROp::H),
-            "P" => Ok(CIGAROp::P),
-            "=" => Ok(CIGAROp::E),
-            "X" => Ok(CIGAROp::X),
-            _ => Err("Could not parse CIGAR operation"),
-        }
+        s.as_bytes()
+            .get(0)
+            .cloned()
+            .and_then(CIGAROp::from_u8)
+            .ok_or("Could not parse CIGAR operation")
     }
 }
 
