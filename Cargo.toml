@@ -13,7 +13,7 @@ categories = ["science"]
 [dependencies]
 lazy_static = "1.4.0"
 regex = "1"
-bstr = "0.2"
+bstr = { version = "0.2", features = ["serde1"] }
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
