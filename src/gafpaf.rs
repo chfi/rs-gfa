@@ -3,6 +3,15 @@ use lazy_static::lazy_static;
 use regex::bytes::Regex;
 use std::ops::Range;
 
+use nom::{
+    branch::{alt, permutation},
+    bytes::complete::*,
+    character::complete::digit1,
+    combinator, multi,
+    sequence::{preceded, separated_pair},
+    IResult,
+};
+
 use crate::gfa::*;
 use crate::optfields::*;
 
@@ -22,9 +31,82 @@ pub struct GAF<T: OptFields> {
     pub optional: T,
 }
 
+#[derive(Debug)]
 pub enum GAFStep {
-    SegIntv(BString, Orientation),
-    StableIntv(BString, Range<usize>),
+    SegId(Orientation, BString),
+    StableIntv(Orientation, BString, Range<usize>),
+}
+
+impl GAFStep {
+    fn parse_orient(bytes: &[u8]) -> IResult<&[u8], Orientation> {
+        use Orientation::*;
+        let fwd = combinator::map(tag(">"), |_| Forward);
+        let bwd = combinator::map(tag("<"), |_| Backward);
+        alt((fwd, bwd))(bytes)
+    }
+
+    pub fn parse_step(i: &[u8]) -> IResult<&[u8], GAFStep> {
+        let (i, orient) = Self::parse_orient(i)?;
+        let (i, name) = is_not("<>: \t\r\n")(i)?;
+        let name = name.into();
+
+        let parse_digits = combinator::map(digit1, |bs| {
+            let s = unsafe { std::str::from_utf8_unchecked(bs) };
+            s.parse::<usize>().unwrap()
+        });
+
+        let parse_range =
+            // preceded(tag(":"), separated_pair(digit1, tag("-"), digit1));
+            preceded(tag(":"), separated_pair(&parse_digits, tag("-"), &parse_digits));
+
+        let (i, range) = combinator::opt(parse_range)(i)?;
+        if let Some((start, end)) = range {
+            let range = start..end;
+            Ok((i, GAFStep::StableIntv(orient, name, range)))
+        } else {
+            Ok((i, GAFStep::SegId(orient, name)))
+        }
+    }
+    // fn parse_orient(bytes: &[u8]) -> Option<Orientation> {
+    //     match bytes {
+    //         b">" => Some(Orientation::Forward),
+    //         b"<" => Some(Orientation::Backward),
+    //         _ => None,
+    //     }
+    // }
+
+    // fn parse_step(bytes: &[u8]) -> IResult<&[u8], GAFStep> {}
+
+    /*
+    fn parse_step(bytes: &[u8]) -> Option<(GAFStep, &[u8])> {
+        // if we're trying to parse a step, we know it's oriented
+        let orient = Self::parse_orient(&bytes[0..=0])?;
+        // next, it's either a GFA segment ID, or a stable ID
+
+        // if there's a colon, we're dealing with a stable ID and its interval
+        if let Some(ix) = bytes.find_byte(b':') {
+            let iv_ix = bytes.find_byte(b'-')?;
+            None
+        } else {
+            // if there's no :, it's a GFA segment ID
+            if let Some(seg_end) = bytes.find_byteset(b"><") {
+                let seg_id: BString = bytes[1..seg_end].into();
+                let rest = &bytes[seg_end..];
+                let step = GAFStep::SegId(seg_id, orient);
+                Some((step, rest))
+            } else {
+                let seg_id: BString = bytes[1..].into();
+                let rest = &[]
+                None
+            }
+            // seg_range.or
+            // if let Some(end_ix) = bytes.find_byteset(b"><") {
+            //     let seg_id = bytes[1..end_ix]
+            // } else {
+            // }
+        }
+    }
+    */
 }
 
 pub enum GAFPath {
