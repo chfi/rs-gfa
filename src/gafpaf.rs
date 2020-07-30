@@ -16,7 +16,7 @@ use crate::gfa::*;
 use crate::optfields::*;
 
 // TODO the path in this definitely needs to be redefined, and the parser fixed
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct GAF<T: OptFields> {
     pub seq_name: BString,
     pub seq_len: usize,
@@ -31,7 +31,7 @@ pub struct GAF<T: OptFields> {
     pub optional: T,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum GAFStep {
     SegId(Orientation, BString),
     StableIntv(Orientation, BString, Range<usize>),
@@ -55,9 +55,10 @@ impl GAFStep {
             s.parse::<usize>().unwrap()
         });
 
-        let parse_range =
-            // preceded(tag(":"), separated_pair(digit1, tag("-"), digit1));
-            preceded(tag(":"), separated_pair(&parse_digits, tag("-"), &parse_digits));
+        let parse_range = preceded(
+            tag(":"),
+            separated_pair(&parse_digits, tag("-"), &parse_digits),
+        );
 
         let (i, range) = combinator::opt(parse_range)(i)?;
         if let Some((start, end)) = range {
@@ -67,46 +68,6 @@ impl GAFStep {
             Ok((i, GAFStep::SegId(orient, name)))
         }
     }
-    // fn parse_orient(bytes: &[u8]) -> Option<Orientation> {
-    //     match bytes {
-    //         b">" => Some(Orientation::Forward),
-    //         b"<" => Some(Orientation::Backward),
-    //         _ => None,
-    //     }
-    // }
-
-    // fn parse_step(bytes: &[u8]) -> IResult<&[u8], GAFStep> {}
-
-    /*
-    fn parse_step(bytes: &[u8]) -> Option<(GAFStep, &[u8])> {
-        // if we're trying to parse a step, we know it's oriented
-        let orient = Self::parse_orient(&bytes[0..=0])?;
-        // next, it's either a GFA segment ID, or a stable ID
-
-        // if there's a colon, we're dealing with a stable ID and its interval
-        if let Some(ix) = bytes.find_byte(b':') {
-            let iv_ix = bytes.find_byte(b'-')?;
-            None
-        } else {
-            // if there's no :, it's a GFA segment ID
-            if let Some(seg_end) = bytes.find_byteset(b"><") {
-                let seg_id: BString = bytes[1..seg_end].into();
-                let rest = &bytes[seg_end..];
-                let step = GAFStep::SegId(seg_id, orient);
-                Some((step, rest))
-            } else {
-                let seg_id: BString = bytes[1..].into();
-                let rest = &[]
-                None
-            }
-            // seg_range.or
-            // if let Some(end_ix) = bytes.find_byteset(b"><") {
-            //     let seg_id = bytes[1..end_ix]
-            // } else {
-            // }
-        }
-    }
-    */
 }
 
 pub enum GAFPath {
@@ -340,6 +301,47 @@ impl std::fmt::Display for CIGAR {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_gaf_step() {
+        use GAFStep::*;
+        use Orientation::*;
+
+        // segment ids
+        let s1 = b">s1";
+        let s2 = b"<segmentid>s1<s2";
+
+        let (i1, step1) = GAFStep::parse_step(s1).unwrap();
+        // The step is parsed as an oriented segment ID
+        assert_eq!(SegId(Forward, "s1".into()), step1);
+        // If there's just one segment ID to parse, it consumes the entire input
+        assert_eq!(b"", i1);
+
+        let (i2, step2) = GAFStep::parse_step(s2).unwrap();
+        assert_eq!(SegId(Backward, "segmentid".into()), step2);
+        assert_eq!(b">s1<s2", i2);
+
+        // Can parse another step from the remaining bytes
+        let (i2_2, step2_2) = GAFStep::parse_step(i2).unwrap();
+        assert_eq!(b"<s2", i2_2);
+        assert_eq!(SegId(Forward, "s1".into()), step2_2);
+
+        // stable intervals
+        let s3 = b">chr1:123-456";
+        let s4 = b"<chr2:123-456<chr2:455-780";
+
+        let (i3, step3) = GAFStep::parse_step(s3).unwrap();
+        assert_eq!(b"", i3);
+        assert_eq!(StableIntv(Forward, "chr1".into(), 123..456), step3);
+
+        let (i4, step4) = GAFStep::parse_step(s4).unwrap();
+        assert_eq!(b"<chr2:455-780", i4);
+        assert_eq!(StableIntv(Backward, "chr2".into(), 123..456), step4);
+
+        let (i4_2, step4_2) = GAFStep::parse_step(i4).unwrap();
+        assert_eq!(b"", i4_2);
+        assert_eq!(StableIntv(Backward, "chr2".into(), 455..780), step4_2);
+    }
 
     #[test]
     fn cigar_display() {
