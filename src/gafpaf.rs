@@ -75,6 +75,24 @@ pub enum GAFPath {
     OrientIntv(Vec<GAFStep>),
 }
 
+impl GAFPath {
+    pub fn parse_path(i: &[u8]) -> IResult<&[u8], GAFPath> {
+        let (i, step) = combinator::opt(GAFStep::parse_step)(i)?;
+
+        if let Some(step) = step {
+            let (i, rest) = multi::many0(GAFStep::parse_step)(i)?;
+            let step: GAFStep = step;
+            let mut rest: Vec<GAFStep> = rest;
+            rest.insert(0, step);
+
+            Ok((i, GAFPath::OrientIntv(rest)))
+        } else {
+            let (i, stable_id) = is_not("\t")(i)?;
+            Ok((i, GAFPath::StableId(stable_id.into())))
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PAF<T: OptFields> {
     pub query_seq_name: BString,
@@ -341,6 +359,12 @@ mod tests {
         let (i4_2, step4_2) = GAFStep::parse_step(i4).unwrap();
         assert_eq!(b"", i4_2);
         assert_eq!(StableIntv(Backward, "chr2".into(), 455..780), step4_2);
+
+        // Stops at tabs
+        let with_tab = b"<s2\t266";
+        let (i, s) = GAFStep::parse_step(with_tab).unwrap();
+        assert_eq!(b"\t266", i);
+        assert_eq!(SegId(Backward, "s2".into()), s);
     }
 
     #[test]
