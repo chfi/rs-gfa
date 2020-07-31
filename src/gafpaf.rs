@@ -1,4 +1,4 @@
-use bstr::{BStr, BString, ByteSlice, ByteVec};
+use bstr::{BString, ByteSlice};
 use std::ops::Range;
 
 use nom::{bytes::complete::*, IResult};
@@ -260,17 +260,51 @@ impl std::str::FromStr for CIGAROp {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CIGAR(pub Vec<(CIGAROp, u32)>);
+pub struct CIGAR(pub Vec<(u32, CIGAROp)>);
 
 impl CIGAR {
-    fn parse_first(bytes: &[u8]) -> Option<((CIGAROp, u32), &[u8])> {
+    fn parse_op_cmd(input: &[u8]) -> IResult<&[u8], CIGAROp> {
+        use nom::{branch::alt, combinator::map};
+        use CIGAROp::*;
+        alt((
+            map(tag("M"), |_| M),
+            map(tag("I"), |_| I),
+            map(tag("D"), |_| D),
+            map(tag("N"), |_| N),
+            map(tag("S"), |_| S),
+            map(tag("H"), |_| H),
+            map(tag("P"), |_| P),
+            map(tag("="), |_| E),
+            map(tag("X"), |_| X),
+        ))(input)
+    }
+
+    pub fn parse(i: &[u8]) -> IResult<&[u8], Self> {
+        use nom::{
+            character::complete::digit1, combinator::map, multi::many1,
+            sequence::pair,
+        };
+        map(
+            many1(pair(
+                map(digit1, |bs| {
+                    let s = unsafe { std::str::from_utf8_unchecked(bs) };
+                    s.parse::<u32>().unwrap()
+                }),
+                Self::parse_op_cmd,
+            )),
+            CIGAR,
+        )(i)
+    }
+
+    /*
+    fn parse_first(bytes: &[u8]) -> Option<((u32, CIGAROp), &[u8])> {
         if bytes[0].is_ascii_digit() {
             let op_ix = bytes.find_byteset(b"MIDNSHP=X")?;
             let num = std::str::from_utf8(&bytes[0..op_ix]).ok()?;
             let num: u32 = num.parse().ok()?;
             let op = CIGAROp::from_u8(bytes[op_ix])?;
             let rest = &bytes[op_ix + 1..];
-            Some(((op, num), rest))
+            Some(((num, op), rest))
         } else {
             None
         }
@@ -280,7 +314,7 @@ impl CIGAR {
         if bytes.is_empty() {
             return None;
         }
-        let mut cigar: Vec<(CIGAROp, u32)> = Vec::new();
+        let mut cigar: Vec<(u32, CIGAROp)> = Vec::new();
         let mut bytes = bytes;
         while bytes.len() > 0 {
             let (cg, rest) = Self::parse_first(bytes)?;
@@ -290,11 +324,12 @@ impl CIGAR {
 
         Some(CIGAR(cigar))
     }
+    */
 }
 
 impl std::fmt::Display for CIGAR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (op, len) in self.0.iter() {
+        for (len, op) in self.0.iter() {
             write!(f, "{}{}", len, op)?
         }
         Ok(())
@@ -460,7 +495,6 @@ mod tests {
 
         let p_orient1 = b">s1>s2<s3<s4";
         let p_orient2 = b">chr1:5-8>foo:8-16<bar:16-20\t298";
-        let p_orient3 = b">s1>s2<s3<s4";
 
         let (i, p) = GAFPath::parse_path(p_orient1).unwrap();
         assert_eq!(b"", i);
@@ -497,7 +531,7 @@ mod tests {
     fn cigar_display() {
         let input = b"20M12D3M4N9S10H5P11=9X";
         let input_str = std::str::from_utf8(input).unwrap();
-        let cigar = CIGAR::from_bytes(input).unwrap();
+        let cigar = CIGAR::parse(input).unwrap().1;
         let cigstr = cigar.to_string();
         assert_eq!(input_str, cigstr);
     }
@@ -507,24 +541,30 @@ mod tests {
         use CIGAROp::*;
 
         let input = b"20M12D3M4N9S10H5P11=9X";
-        let cigar = CIGAR::from_bytes(input);
+        let (i, cigar) = CIGAR::parse(input).unwrap();
+        assert_eq!(b"", i);
         assert_eq!(
-            Some(CIGAR(vec![
-                (M, 20),
-                (D, 12),
-                (M, 3),
-                (N, 4),
-                (S, 9),
-                (H, 10),
-                (P, 5),
-                (E, 11),
-                (X, 9)
-            ])),
+            CIGAR(vec![
+                (20, M),
+                (12, D),
+                (3, M),
+                (4, N),
+                (9, S),
+                (10, H),
+                (5, P),
+                (11, E),
+                (9, X)
+            ]),
             cigar
         );
 
-        assert_eq!(None, CIGAR::from_bytes(b"M20"));
-        assert_eq!(None, CIGAR::from_bytes(b"20"));
-        assert_eq!(None, CIGAR::from_bytes(b""));
+        let input = b"20M12D93  X";
+        let (i, cigar) = CIGAR::parse(input).unwrap();
+        assert_eq!(b"93  X", i);
+        assert_eq!(CIGAR(vec![(20, M), (12, D)]), cigar);
+
+        assert!(CIGAR::parse(b"M20").is_err());
+        assert!(CIGAR::parse(b"20").is_err());
+        assert!(CIGAR::parse(b"").is_err());
     }
 }
