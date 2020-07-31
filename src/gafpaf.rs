@@ -1,5 +1,5 @@
 use bstr::{BString, ByteSlice};
-use std::ops::Range;
+use std::fmt::Display;
 
 use nom::{bytes::complete::*, IResult};
 
@@ -21,10 +21,59 @@ pub struct GAF<T: OptFields> {
     pub optional: T,
 }
 
+impl<T: OptFields> Display for GAF<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\t{}\t{}\t{}\t{}",
+            self.seq_name,
+            self.seq_len,
+            self.seq_range.0,
+            self.seq_range.1,
+            self.strand
+        )?;
+
+        write!(
+            f,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            self.path,
+            self.path_len,
+            self.path_range.0,
+            self.path_range.1,
+            self.residue_matches,
+            self.block_length,
+            self.quality
+        )?;
+
+        for opt in self.optional.fields() {
+            write!(f, "\t{}", opt)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum GAFStep {
     SegId(Orientation, BString),
-    StableIntv(Orientation, BString, (usize, usize)),
+    StableIntv(Orientation, BString, usize, usize),
+}
+
+impl Display for GAFStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Orientation::*;
+        let o_str = |o: &Orientation| match o {
+            Forward => ">",
+            Backward => "<",
+        };
+
+        match self {
+            GAFStep::SegId(o, seg) => write!(f, "{}{}", o_str(o), seg),
+            GAFStep::StableIntv(o, id, from, to) => {
+                write!(f, "{}{}:{}-{}", o_str(o), id, from, to)
+            }
+        }
+    }
 }
 
 impl GAFStep {
@@ -60,8 +109,7 @@ impl GAFStep {
 
         let (i, range) = opt(parse_range)(i)?;
         if let Some((start, end)) = range {
-            let range = (start, end);
-            Ok((i, GAFStep::StableIntv(orient, name, range)))
+            Ok((i, GAFStep::StableIntv(orient, name, start, end)))
         } else {
             Ok((i, GAFStep::SegId(orient, name)))
         }
@@ -93,6 +141,20 @@ impl GAFPath {
     }
 }
 
+impl Display for GAFPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GAFPath::StableId(id) => write!(f, "{}", id),
+            GAFPath::OrientIntv(steps) => {
+                for s in steps {
+                    write!(f, "{}", s)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PAF<T: OptFields> {
     pub query_seq_name: BString,
@@ -106,6 +168,38 @@ pub struct PAF<T: OptFields> {
     pub block_length: usize,
     pub quality: u8,
     pub optional: T,
+}
+
+impl<T: OptFields> Display for PAF<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\t{}\t{}\t{}\t{}",
+            self.query_seq_name,
+            self.query_seq_len,
+            self.query_seq_range.0,
+            self.query_seq_range.1,
+            self.strand
+        )?;
+
+        write!(
+            f,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            self.target_seq_name,
+            self.target_seq_len,
+            self.target_seq_range.0,
+            self.target_seq_range.1,
+            self.residue_matches,
+            self.block_length,
+            self.quality
+        )?;
+
+        for opt in self.optional.fields() {
+            write!(f, "\t{}", opt)?;
+        }
+
+        Ok(())
+    }
 }
 
 fn parse_next<I, T>(mut input: I) -> Option<T>
@@ -387,8 +481,8 @@ mod tests {
             b"read2\t7\t0\t7\t-\t>chr1:5-8>foo:8-16\t11\t1\t8\t7\t7\t60\tcg:Z:7M";
 
         let path_i3: Vec<GAFStep> = vec![
-            StableIntv(Forward, "chr1".into(), (5, 8)),
-            StableIntv(Forward, "foo".into(), (8, 16)),
+            StableIntv(Forward, "chr1".into(), 5, 8),
+            StableIntv(Forward, "foo".into(), 8, 16),
         ];
 
         let expected_3 = GAF {
@@ -440,15 +534,15 @@ mod tests {
 
         let (i3, step3) = GAFStep::parse_step(s3).unwrap();
         assert_eq!(b"", i3);
-        assert_eq!(StableIntv(Forward, "chr1".into(), (123, 456)), step3);
+        assert_eq!(StableIntv(Forward, "chr1".into(), 123, 456), step3);
 
         let (i4, step4) = GAFStep::parse_step(s4).unwrap();
         assert_eq!(b"<chr2:455-780", i4);
-        assert_eq!(StableIntv(Backward, "chr2".into(), (123, 456)), step4);
+        assert_eq!(StableIntv(Backward, "chr2".into(), 123, 456), step4);
 
         let (i4_2, step4_2) = GAFStep::parse_step(i4).unwrap();
         assert_eq!(b"", i4_2);
-        assert_eq!(StableIntv(Backward, "chr2".into(), (455, 780)), step4_2);
+        assert_eq!(StableIntv(Backward, "chr2".into(), 455, 780), step4_2);
 
         // Stops at tabs
         let with_tab = b"<s2\t266";
@@ -471,10 +565,12 @@ mod tests {
 
         let seg_fwd = |bs: &str| SegId(Forward, bs.into());
         let seg_bwd = |bs: &str| SegId(Backward, bs.into());
-        let stbl_fwd =
-            |bs: &str, r: (usize, usize)| StableIntv(Forward, bs.into(), r);
-        let stbl_bwd =
-            |bs: &str, r: (usize, usize)| StableIntv(Backward, bs.into(), r);
+        let stbl_fwd = |bs: &str, r: (usize, usize)| {
+            StableIntv(Forward, bs.into(), r.0, r.1)
+        };
+        let stbl_bwd = |bs: &str, r: (usize, usize)| {
+            StableIntv(Backward, bs.into(), r.0, r.1)
+        };
 
         // stable IDs
         let p_id1 = b"some_id1";
