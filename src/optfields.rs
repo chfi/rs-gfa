@@ -160,7 +160,7 @@ impl std::fmt::Display for OptField {
 }
 
 /// OptFields describes how to parse, store, and query optional fields
-pub trait OptFields: Sized + Default {
+pub trait OptFields: Sized + Default + Clone {
     /// Return the optional field with the given tag, if it exists.
     fn get_field(&self, tag: &[u8]) -> Option<&OptField>;
 
