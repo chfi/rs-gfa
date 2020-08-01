@@ -35,7 +35,7 @@ impl<T: OptFields> Display for GAF<T> {
 
         write!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             self.path,
             self.path_len,
             self.path_range.0,
@@ -184,7 +184,7 @@ impl<T: OptFields> Display for PAF<T> {
 
         write!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             self.target_seq_name,
             self.target_seq_len,
             self.target_seq_range.0,
