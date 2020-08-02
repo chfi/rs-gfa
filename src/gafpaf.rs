@@ -353,7 +353,7 @@ impl std::str::FromStr for CIGAROp {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CIGAR(pub Vec<(u32, CIGAROp)>);
 
 impl CIGAR {
@@ -373,7 +373,7 @@ impl CIGAR {
         ))(input)
     }
 
-    pub fn parse(i: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parser(i: &[u8]) -> IResult<&[u8], Self> {
         use nom::{
             character::complete::digit1, combinator::map, multi::many1,
             sequence::pair,
@@ -390,35 +390,81 @@ impl CIGAR {
         )(i)
     }
 
-    /*
-    fn parse_first(bytes: &[u8]) -> Option<((u32, CIGAROp), &[u8])> {
-        if bytes[0].is_ascii_digit() {
-            let op_ix = bytes.find_byteset(b"MIDNSHP=X")?;
-            let num = std::str::from_utf8(&bytes[0..op_ix]).ok()?;
-            let num: u32 = num.parse().ok()?;
-            let op = CIGAROp::from_u8(bytes[op_ix])?;
-            let rest = &bytes[op_ix + 1..];
-            Some(((num, op), rest))
-        } else {
-            None
-        }
+    pub fn from_bytes(i: &[u8]) -> Option<Self> {
+        Self::parser(i).ok().map(|(_, cg)| cg)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.is_empty() {
-            return None;
+    pub fn len(&self) -> usize {
+        self.0
+            .iter()
+            .fold(0, |s, (op_len, _op)| s + *op_len as usize)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = CIGAROp> + '_ {
+        self.0
+            .iter()
+            .copied()
+            .flat_map(|(i, c)| std::iter::repeat(c).take(i as usize))
+    }
+
+    /// Given an index along the cigar string, return a pair of
+    /// indices, where the first is the index to the cigar operation in this
+    /// cigar that includes the given index, and the second is the
+    /// remainder of the index
+    pub fn index(&self, i: usize) -> (usize, usize) {
+        self.0
+            .iter()
+            .try_fold((0, i), |(v_ix, o_ix), (count, _)| {
+                let count = *count as usize;
+                if o_ix < count || v_ix >= self.0.len() {
+                    Err((v_ix, o_ix))
+                } else {
+                    Ok((v_ix + 1, o_ix - count))
+                }
+            })
+            .unwrap_or_else(|x| x)
+    }
+
+    /// Split a cigar at the provided index, returning two new cigars;
+    /// e.g. splitting 4M at index 1 produces (1M, 3M)
+
+    pub fn split_at(&self, i: usize) -> (Self, Self) {
+        let (v_ix, o_ix) = self.index(i);
+        let mut left_cg = self.0.clone();
+        let mut right_cg = left_cg.split_off(v_ix);
+
+        if o_ix != 0 {
+            if let Some(r_first) = right_cg.first_mut() {
+                let ix = o_ix as u32;
+                left_cg.push((ix, r_first.1));
+                r_first.0 -= ix;
+            }
         }
-        let mut cigar: Vec<(u32, CIGAROp)> = Vec::new();
-        let mut bytes = bytes;
-        while bytes.len() > 0 {
-            let (cg, rest) = Self::parse_first(bytes)?;
-            cigar.push(cg);
-            bytes = rest;
+        (CIGAR(left_cg), CIGAR(right_cg))
+    }
+
+    pub fn align_offsets(
+        &self,
+        mut query_offset: usize,
+        mut ref_offset: usize,
+    ) -> (usize, usize) {
+        use CIGAROp::*;
+
+        for (steps, op) in self.0.iter() {
+            let steps = *steps as usize;
+            match op {
+                M | E | X => {
+                    query_offset += steps;
+                    ref_offset += steps;
+                }
+                I | S => query_offset += steps,
+                D | N => ref_offset += steps,
+                H | P => {}
+            }
         }
 
-        Some(CIGAR(cigar))
+        (query_offset, ref_offset)
     }
-    */
 }
 
 impl std::fmt::Display for CIGAR {
@@ -627,7 +673,7 @@ mod tests {
     fn cigar_display() {
         let input = b"20M12D3M4N9S10H5P11=9X";
         let input_str = std::str::from_utf8(input).unwrap();
-        let cigar = CIGAR::parse(input).unwrap().1;
+        let cigar = CIGAR::parser(input).unwrap().1;
         let cigstr = cigar.to_string();
         assert_eq!(input_str, cigstr);
     }
@@ -637,7 +683,7 @@ mod tests {
         use CIGAROp::*;
 
         let input = b"20M12D3M4N9S10H5P11=9X";
-        let (i, cigar) = CIGAR::parse(input).unwrap();
+        let (i, cigar) = CIGAR::parser(input).unwrap();
         assert_eq!(b"", i);
         assert_eq!(
             CIGAR(vec![
@@ -655,12 +701,42 @@ mod tests {
         );
 
         let input = b"20M12D93  X";
-        let (i, cigar) = CIGAR::parse(input).unwrap();
+        let (i, cigar) = CIGAR::parser(input).unwrap();
         assert_eq!(b"93  X", i);
         assert_eq!(CIGAR(vec![(20, M), (12, D)]), cigar);
 
-        assert!(CIGAR::parse(b"M20").is_err());
-        assert!(CIGAR::parse(b"20").is_err());
-        assert!(CIGAR::parse(b"").is_err());
+        assert!(CIGAR::parser(b"M20").is_err());
+        assert!(CIGAR::parser(b"20").is_err());
+        assert!(CIGAR::parser(b"").is_err());
+    }
+
+    #[test]
+    fn split_cigars() {
+        let input = b"20M12D3M4N9S10H5P11=9X";
+        let (_i, cigar) = CIGAR::parser(input).unwrap();
+
+        let (l, r) = cigar.split_at(0);
+        assert_eq!("", l.to_string());
+        assert_eq!("20M12D3M4N9S10H5P11=9X", r.to_string());
+
+        let (l, r) = cigar.split_at(10);
+        assert_eq!("10M", l.to_string());
+        assert_eq!("10M12D3M4N9S10H5P11=9X", r.to_string());
+
+        let (l, r) = cigar.split_at(20);
+        assert_eq!("20M", l.to_string());
+        assert_eq!("12D3M4N9S10H5P11=9X", r.to_string());
+
+        let (l, r) = cigar.split_at(25);
+        assert_eq!("20M5D", l.to_string());
+        assert_eq!("7D3M4N9S10H5P11=9X", r.to_string());
+
+        let (l, r) = cigar.split_at(80);
+        assert_eq!("20M12D3M4N9S10H5P11=6X", l.to_string());
+        assert_eq!("3X", r.to_string());
+
+        let (l, r) = cigar.split_at(85);
+        assert_eq!("20M12D3M4N9S10H5P11=9X", l.to_string());
+        assert_eq!("", r.to_string());
     }
 }
