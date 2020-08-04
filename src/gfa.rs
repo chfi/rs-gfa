@@ -1,14 +1,13 @@
 use bstr::{BStr, BString, ByteSlice};
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashMap;
-
 use crate::optfields::*;
 
 /// This module defines the various GFA line types, the GFA object,
-/// and some utility functions and types
+/// and some utility functions and types.
 
-/// Simple representation of a parsed GFA file
+/// Simple representation of a parsed GFA file, using a Vec<T> to
+/// store each separate GFA line type.
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct GFA<N, T: OptFields> {
     pub header: Header<T>,
@@ -19,6 +18,10 @@ pub struct GFA<N, T: OptFields> {
 }
 
 impl<N, T: OptFields> GFA<N, T> {
+    /// Insert a GFA line (wrapped in the Line enum) into an existing
+    /// GFA. Simply pushes it into the corresponding Vec in the GFA,
+    /// or replaces the header, so there's no deduplication or sorting
+    /// taking place.
     pub fn insert_line(&mut self, line: Line<N, T>) {
         use Line::*;
         match line {
@@ -215,7 +218,8 @@ impl<T: OptFields> Containment<BString, T> {
 }
 
 /// The step list that the path actually consists of is an unparsed
-/// BString to keep memory down
+/// BString to keep memory down; use path.iter() to get an iterator
+/// over the parsed path segments and orientations.
 #[derive(
     Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
 )]
@@ -227,12 +231,14 @@ pub struct Path<T: OptFields> {
 }
 
 impl<T: OptFields> Path<T> {
+    /// `true` if each of the segment names of the path can be parsed to `usize`
     pub fn usize_segments(&self) -> bool {
         self.iter()
             .all(|(seg, _)| seg.iter().all(|b| b.is_ascii_digit()))
     }
 }
 
+/*
 pub enum PathSegments {
     Unparsed(BString),
     Parsed(Vec<(BString, Orientation)>),
@@ -255,8 +261,10 @@ impl PathSegments {
         }
     }
 }
+*/
 
-/// Parses a segment in a Path's segment_names into a segment name and orientation
+/// Parses a segment in a Path's segment_names into a segment name and
+/// orientation
 fn parse_path_segment(input: &[u8]) -> (&'_ BStr, Orientation) {
     use Orientation::*;
     let last = input.len() - 1;

@@ -7,7 +7,11 @@ use crate::optfields::*;
 
 type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
 
-/// GFAParser encapsulates a parsing configuration
+/// GFAParser encapsulates a parsing configuration, which is currently
+/// limited to filtering based on line type, and the choice of
+/// optional fields storage (see optfields.rs). Will likely become
+/// generic over the `N` type in `GFA<N, T: OptFields>`, but for now
+/// the parser only produces GFA lines with BString segment names.
 pub struct GFAParser<T: OptFields> {
     filter: GFALineFilter,
     _optional_fields: std::marker::PhantomData<T>,
@@ -20,10 +24,15 @@ impl<T: OptFields> Default for GFAParser<T> {
 }
 
 impl<T: OptFields> GFAParser<T> {
+    /// Create a new GFAParser that will parse all four GFA line
+    /// types, and use the optional fields parser and storage `T`.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Create a new GFAParser using the provided configuration.
+    /// `GFAParsingConfig::all()` and `GFAParsingConfig::none()` can
+    /// be used as a basis for more granular choices.
     pub fn with_config(config: GFAParsingConfig) -> Self {
         let filter = config.make_filter();
         GFAParser {
@@ -33,15 +42,17 @@ impl<T: OptFields> GFAParser<T> {
     }
 
     /// Filters a line before parsing, only passing through the lines
-    /// enabled in the config used to make this parser
+    /// enabled in the config used to make this parser. NB: this will
+    /// probably change in the future; I was playing around with
+    /// storing the line filter as a closure for performance, but
+    /// still need to profile that aspect
     fn filter_line<'a>(&self, line: &'a BStr) -> Option<&'a BStr> {
         (self.filter)(line)
     }
-}
 
-impl<T: OptFields> GFAParser<T> {
-    /// Consume a line-by-line iterator of bytestrings to produce a
-    /// GFA object
+    /// Consume an iterator of lines of bytes, parsing each as a GFA
+    /// line. Returns a GFA object containing all the parsed lines.
+    /// Lines that could not be parsed are ignored.
     pub fn parse_all<I>(&self, input: I) -> GFA<BString, T>
     where
         I: Iterator,
@@ -56,7 +67,8 @@ impl<T: OptFields> GFAParser<T> {
         gfa
     }
 
-    /// Parse a single line into a GFA line
+    /// Parse a single line into a GFA line. The result can be
+    /// inserted into a GFA object using the GFA insert_line() method.
     pub fn parse_line(&self, line: &[u8]) -> Option<Line<BString, T>> {
         use Line::*;
         let line: &BStr = line.as_ref();
@@ -76,6 +88,8 @@ impl<T: OptFields> GFAParser<T> {
         }
     }
 
+    /// Convenience function for parsing a .gfa file. Opens the file
+    /// at the provided path and reads it line-by-line.
     pub fn parse_file<P: AsRef<std::path::Path>>(
         &self,
         path: P,
@@ -103,7 +117,7 @@ impl<T: OptFields> GFAParser<T> {
 
 /// Represents the user-facing parser configuration that does not
 /// depend on the type of the resulting GFA object; currently limited
-/// to filtering which lines to parse and which to ignore
+/// to filtering which lines to parse and which to ignore.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct GFAParsingConfig {
     pub segments: bool,
@@ -119,7 +133,7 @@ impl std::default::Default for GFAParsingConfig {
 }
 
 impl GFAParsingConfig {
-    /// Parse no GFA lines, useful if you only want to parse one line type
+    /// Parse no GFA lines, useful if you only want to parse one line type.
     pub fn none() -> Self {
         GFAParsingConfig {
             segments: false,
@@ -129,7 +143,7 @@ impl GFAParsingConfig {
         }
     }
 
-    /// Parse all GFA lines
+    /// Parse all GFA lines.
     pub fn all() -> Self {
         GFAParsingConfig {
             segments: true,
@@ -163,8 +177,15 @@ impl GFAParsingConfig {
     }
 }
 
-/// Trait for parsing a single line into one of the GFA line types
+/// Trait for parsing a single line into one of the GFA line types,
+/// should only be implemented for the five types in the spec. NB: For
+/// now this trait is oblivious to the type of optional fields, but
+/// that may change in the future, for example if we want an OptFields
+/// type that requires some tags be present.
 trait ParseGFA: Sized + Default {
+    /// The parsers all work on iterators over fields of byte slices,
+    /// assumed to be created by splitting the lines of a GFA file on
+    /// tabs.
     fn parse_line<I>(input: I) -> Option<Self>
     where
         I: Iterator,

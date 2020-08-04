@@ -3,17 +3,24 @@ use bstr::{BString, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
-/// These type aliases are useful for configuring the parsers
+/// These type aliases are useful for configuring the parsers, as the
+/// type of the optional field container must be given when creating a
+/// GFAParser or GFA object.
 pub type OptionalFields = Vec<OptField>;
 pub type NoOptionalFields = ();
 
-/// An optional field a la SAM
+/// An optional field a la SAM. Identified by its tag, which is any
+/// two characters matching [A-Za-z][A-Za-z0-9].
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct OptField {
     pub tag: [u8; 2],
     pub value: OptFieldVal,
 }
 
+/// enum for representing each of the SAM optional field types. The
+/// `B` type, which denotes either an integer or float array, is split
+/// in two variants, and they ignore the size modifiers in the spec,
+/// instead always holding i64 or f32.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum OptFieldVal {
     A(u8),
@@ -27,7 +34,8 @@ pub enum OptFieldVal {
 }
 
 impl OptField {
-    /// Panics if the provided tag doesn't match the regex [A-Z][A-Za-z]
+    /// Panics if the provided tag doesn't match the regex
+    /// [A-Za-z][A-Za-z0-9].
     pub fn tag(t: &[u8]) -> [u8; 2] {
         assert_eq!(t.len(), 2);
         assert!(t[0].is_ascii_alphabetic());
@@ -35,7 +43,9 @@ impl OptField {
         [t[0], t[1]]
     }
 
-    /// Create a new OptField from a tag name and a value.
+    /// Create a new OptField from a tag name and a value, panicking
+    /// if the provided tag doesn't fulfill the requirements of
+    /// OptField::tag().
     pub fn new(tag: &[u8], value: OptFieldVal) -> Self {
         let tag = OptField::tag(tag);
         OptField { tag, value }
@@ -121,7 +131,9 @@ impl OptField {
     }
 }
 
-/// The Display implementation output that can be parsed back to OptField
+/// The Display implementation produces spec-compliant strings in the
+/// <TAG>:<TYPE>:<VALUE> format, and can be parsed back using
+/// OptField::parse().
 impl std::fmt::Display for OptField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use OptFieldVal::*;
@@ -159,16 +171,24 @@ impl std::fmt::Display for OptField {
     }
 }
 
-/// OptFields describes how to parse, store, and query optional fields
+/// The OptFields trait describes how to parse, store, and query
+/// optional fields. Each of the GFA line types and the GFA struct
+/// itself are generic over the optional fields, so the choice of
+/// OptFields implementor can impact memory usage, which optional
+/// fields are parsed, and possibly more in the future
 pub trait OptFields: Sized + Default + Clone {
     /// Return the optional field with the given tag, if it exists.
     fn get_field(&self, tag: &[u8]) -> Option<&OptField>;
 
-    /// Return all optional fields.
+    /// Return a slice over all optional fields. NB: This may be
+    /// replaced by an iterator or something else in the future
     fn fields(&self) -> &[OptField];
 
-    /// Given a sequence of bytestrings, parse them as optional fields
-    /// to create a collection
+    /// Given an iterator over bytestrings, each expected to hold one
+    /// optional field (in the <TAG>:<TYPE>:<VALUE> format), parse
+    /// them as optional fields to create a collection. Returns `Self`
+    /// rather than `Option<Self>` for now, but this may be changed to
+    /// become fallible in the future.
     fn parse<T>(input: T) -> Self
     where
         T: IntoIterator,
@@ -176,7 +196,8 @@ pub trait OptFields: Sized + Default + Clone {
 }
 
 /// This implementation is useful for performance if we don't actually
-/// need any optional fields
+/// need any optional fields. () takes up zero space, and all
+/// methods are no-ops.
 impl OptFields for () {
     fn get_field(&self, _: &[u8]) -> Option<&OptField> {
         None
@@ -194,7 +215,10 @@ impl OptFields for () {
     }
 }
 
-/// Stores all the optional fields in a vector
+/// Stores all the optional fields in a vector. `get_field` simply
+/// uses std::iter::Iterator::find(), but as there are only a
+/// relatively small number of optional fields in practice, it should
+/// be efficient enough.
 impl OptFields for Vec<OptField> {
     fn get_field(&self, tag: &[u8]) -> Option<&OptField> {
         self.iter().find(|o| o.tag == tag).map(|v| v)

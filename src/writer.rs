@@ -4,6 +4,10 @@ use bstr::BString;
 use std::fmt::Display;
 use std::fmt::Write;
 
+/// This entire module will probably be removed, with the functions
+/// replaced by Display implementations on GFA and the GFA line types,
+/// but I haven't gotten around to it yet
+
 fn write_optional_fields<U: OptFields, T: Write>(opts: &U, stream: &mut T) {
     for field in opts.fields() {
         write!(stream, "\t{}", field).unwrap_or_else(|err| {

@@ -6,6 +6,9 @@ use nom::{bytes::complete::*, IResult};
 use crate::gfa::*;
 use crate::optfields::*;
 
+/// A GAF record, with optional fields T. Can be created by using
+/// `parse_gaf`, and the Display implementation produces
+/// spec-compliant tab-delimited output.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GAF<T: OptFields> {
     pub seq_name: BString,
@@ -53,6 +56,9 @@ impl<T: OptFields> Display for GAF<T> {
     }
 }
 
+/// enum representing the two kinds of step in a GAF path; either an
+/// oriented GFA segment ID, or an oriented interval on a stable rGFA
+/// reference.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GAFStep {
     SegId(Orientation, BString),
@@ -77,6 +83,9 @@ impl Display for GAFStep {
 }
 
 impl GAFStep {
+    // The steps in a GAF path use '>' and '<' to denote relative
+    // strand of a path step, so we need another Orientation parser to
+    // reuse that type here
     fn parse_orient(bytes: &[u8]) -> IResult<&[u8], Orientation> {
         use nom::{branch::alt, combinator::map};
         use Orientation::*;
@@ -86,7 +95,7 @@ impl GAFStep {
         alt((fwd, bwd))(bytes)
     }
 
-    pub fn parse_step(i: &[u8]) -> IResult<&[u8], GAFStep> {
+    pub(crate) fn parse_step(i: &[u8]) -> IResult<&[u8], GAFStep> {
         use nom::{
             character::complete::digit1,
             combinator::{map, opt},
@@ -116,6 +125,12 @@ impl GAFStep {
     }
 }
 
+/// enum representing the two kinds of GAF path; either the ID of a
+/// stable rGFA identifier, or a list of oriented steps.
+// NB: it may be the case that the GAFStep enum could be replaced with
+// a third variant here, as I doubt a path would mix GFA segment IDs
+// and rGFA stable intervals, but I'm not sure, so I'm keeping this as
+// is for now.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GAFPath {
     StableId(BString),
@@ -123,7 +138,7 @@ pub enum GAFPath {
 }
 
 impl GAFPath {
-    pub fn parse_path(i: &[u8]) -> IResult<&[u8], GAFPath> {
+    pub(crate) fn parse_path(i: &[u8]) -> IResult<&[u8], GAFPath> {
         use nom::{
             combinator::{opt, verify},
             multi::many1,
@@ -155,6 +170,9 @@ impl Display for GAFPath {
     }
 }
 
+/// A PAF record, with optional fields T. Can be created by using
+/// `parse_gaf`, and the Display implementation produces
+/// spec-compliant tab-delimited output.
 #[derive(Debug, Clone)]
 pub struct PAF<T: OptFields> {
     pub query_seq_name: BString,
@@ -226,6 +244,8 @@ where
     Some((name, len, (start, end)))
 }
 
+/// Parse a PAF record from an iterator over the tab-delimited fields
+/// of bytes
 pub fn parse_paf<I, T>(mut input: I) -> Option<PAF<T>>
 where
     I: Iterator,
@@ -263,6 +283,8 @@ where
 
 // Since GAF and PAF are *essentially* the same, we just reuse the PAF
 // parser and add a check that the path matches the spec regex
+/// Parse a GAF record from an iterator over the tab-delimited fields
+/// of bytes
 pub fn parse_gaf<I, T>(input: I) -> Option<GAF<T>>
 where
     I: Iterator,
@@ -356,6 +378,7 @@ impl std::str::FromStr for CIGAROp {
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CIGAR(pub Vec<(u32, CIGAROp)>);
 
+#[allow(clippy::len_without_is_empty)]
 impl CIGAR {
     fn parse_op_cmd(input: &[u8]) -> IResult<&[u8], CIGAROp> {
         use nom::{branch::alt, combinator::map};
@@ -373,7 +396,7 @@ impl CIGAR {
         ))(input)
     }
 
-    pub fn parser(i: &[u8]) -> IResult<&[u8], Self> {
+    pub(crate) fn parser(i: &[u8]) -> IResult<&[u8], Self> {
         use nom::{
             character::complete::digit1, combinator::map, multi::many1,
             sequence::pair,
@@ -390,16 +413,22 @@ impl CIGAR {
         )(i)
     }
 
+    /// Parse a CIGAR object from an ASCII byte slice
     pub fn from_bytes(i: &[u8]) -> Option<Self> {
         Self::parser(i).ok().map(|(_, cg)| cg)
     }
 
+    // NB No is_empty() method yet because I haven't decided on the
+    // semantics of an empty cigar string, such as "" vs "0M" vs "*"
     pub fn len(&self) -> usize {
         self.0
             .iter()
             .fold(0, |s, (op_len, _op)| s + *op_len as usize)
     }
 
+    /// Produces an iterator over the individual CIGAR operations in
+    /// the string, e.g. an iterator over "3M2D" would produce [M, M,
+    /// M, D, D]
     pub fn iter(&self) -> impl Iterator<Item = CIGAROp> + '_ {
         self.0
             .iter()
@@ -408,9 +437,10 @@ impl CIGAR {
     }
 
     /// Given an index along the cigar string, return a pair of
-    /// indices, where the first is the index to the cigar operation in this
-    /// cigar that includes the given index, and the second is the
-    /// remainder of the index
+    /// indices, where the first is the index to the cigar operation
+    /// in this cigar that includes the given index, and the second is
+    /// the remainder of the index, or the number of operations at the
+    /// index that will be kept
     pub fn index(&self, i: usize) -> (usize, usize) {
         self.0
             .iter()
@@ -426,8 +456,8 @@ impl CIGAR {
     }
 
     /// Split a cigar at the provided index, returning two new cigars;
-    /// e.g. splitting 4M at index 1 produces (1M, 3M)
-
+    /// e.g. splitting 4M at index 1 produces (1M, 3M); splitting
+    /// 6M3I4D at index 8 produces (6M2I, 1I4D)
     pub fn split_at(&self, i: usize) -> (Self, Self) {
         let (v_ix, o_ix) = self.index(i);
         let mut left_cg = self.0.clone();
@@ -443,6 +473,8 @@ impl CIGAR {
         (CIGAR(left_cg), CIGAR(right_cg))
     }
 
+    /// Given a starting query sequence offset and reference sequence
+    /// offset, shift the offsets according to the CIGAR operations.
     pub fn align_offsets(
         &self,
         mut query_offset: usize,
@@ -607,8 +639,6 @@ mod tests {
         use GAFStep::*;
         use Orientation::*;
 
-        use std::ops::Range;
-
         let seg_fwd = |bs: &str| SegId(Forward, bs.into());
         let seg_bwd = |bs: &str| SegId(Backward, bs.into());
         let stbl_fwd = |bs: &str, r: (usize, usize)| {
@@ -629,9 +659,6 @@ mod tests {
         let (i, p) = GAFPath::parse_path(p_id2).unwrap();
         assert_eq!(b"\t123", i);
         assert_eq!(StableId("chr1".into()), p);
-
-        println!("{:?}", GAFPath::parse_path(p_id1));
-        println!("{:?}", GAFPath::parse_path(p_id2));
 
         // oriented paths
 
@@ -708,6 +735,15 @@ mod tests {
         assert!(CIGAR::parser(b"M20").is_err());
         assert!(CIGAR::parser(b"20").is_err());
         assert!(CIGAR::parser(b"").is_err());
+    }
+
+    #[test]
+    fn temp_split_test() {
+        let input = b"6M3I4D";
+        let (_, cigar) = CIGAR::parser(input).unwrap();
+
+        let (l, r) = cigar.split_at(8);
+        println!("{}, {}", l, r);
     }
 
     #[test]
