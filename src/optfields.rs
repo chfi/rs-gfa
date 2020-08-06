@@ -69,14 +69,14 @@ impl OptField {
         use std::str::from_utf8;
         use OptFieldVal::*;
 
-        let o_tag = &input[0..=1];
+        let o_tag = input.get(0..=1)?;
 
-        let o_type = input[3];
+        let o_type = input.get(3)?;
         if !b"AifZJHB".contains(&o_type) {
             return None;
         }
 
-        let o_contents = &input[5..];
+        let o_contents = input.get(5..)?;
 
         let o_val = match o_type {
             // char

@@ -71,7 +71,7 @@ impl<T: OptFields> GFAParser<T> {
     /// inserted into a GFA object using the GFA insert_line() method.
     pub fn parse_line(&self, line: &[u8]) -> Option<Line<BString, T>> {
         use Line::*;
-        let line: &BStr = line.as_ref();
+        let line: &BStr = line.trim().as_ref();
         if let Some(line) = self.filter_line(line) {
             let mut fields = line.split_str(b"\t");
             let hdr = fields.next()?;
