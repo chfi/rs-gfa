@@ -354,6 +354,20 @@ impl CIGAROp {
             _ => None,
         }
     }
+
+    /// The first coordinate in the return value corresponds to
+    /// whether or not the operation consumes the query sequence, the
+    /// second coordinate the reference sequence
+    fn step(&self) -> (usize, usize) {
+        use CIGAROp::*;
+
+        match self {
+            M | E | X => (1, 1),
+            I | S => (1, 0),
+            D | N => (0, 1),
+            H | P => (0, 0),
+        }
+    }
 }
 
 impl std::fmt::Display for CIGAROp {
@@ -450,6 +464,36 @@ impl CIGAR {
                     Err((v_ix, o_ix))
                 } else {
                     Ok((v_ix + 1, o_ix - count))
+                }
+            })
+            .unwrap_or_else(|x| x)
+    }
+
+    pub fn query_index(&self, i: usize) -> (usize, usize) {
+        self.0
+            .iter()
+            .try_fold((0, i), |(v_ix, o_ix), (count, op)| {
+                let count = *count as usize;
+                if o_ix < count || v_ix >= self.0.len() {
+                    Err((v_ix, o_ix))
+                } else {
+                    let (step, _) = op.step();
+                    Ok((v_ix + step, o_ix - count))
+                }
+            })
+            .unwrap_or_else(|x| x)
+    }
+
+    pub fn ref_index(&self, i: usize) -> (usize, usize) {
+        self.0
+            .iter()
+            .try_fold((0, i), |(v_ix, o_ix), (count, op)| {
+                let count = *count as usize;
+                if o_ix < count || v_ix >= self.0.len() {
+                    Err((v_ix, o_ix))
+                } else {
+                    let (_, step) = op.step();
+                    Ok((v_ix + step, o_ix - count))
                 }
             })
             .unwrap_or_else(|x| x)
