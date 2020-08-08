@@ -1,4 +1,6 @@
 use bstr::{BString, ByteSlice};
+
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Display;
 
 use nom::{bytes::complete::*, IResult};
@@ -321,6 +323,68 @@ pub enum CIGAROp {
     P = 6,
     E = 7,
     X = 8,
+}
+
+impl TryFrom<u8> for CIGAROp {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        use CIGAROp::*;
+        match value {
+            b'M' => Ok(M),
+            b'I' => Ok(I),
+            b'D' => Ok(D),
+            b'N' => Ok(N),
+            b'S' => Ok(S),
+            b'H' => Ok(H),
+            b'P' => Ok(P),
+            b'=' => Ok(E),
+            b'X' => Ok(X),
+            _ => Err(()),
+        }
+    }
+}
+
+/// A memory-efficient representation of a single CIGAR op + length, as
+/// a u32.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CIGARPair(u32);
+
+#[allow(clippy::len_without_is_empty)]
+impl CIGARPair {
+    pub fn new(len: u32, op: CIGAROp) -> Option<Self> {
+        if len < (1 << 28) {
+            Some(CIGARPair((len << 4) | (op as u32)))
+        } else {
+            None
+        }
+    }
+
+    pub fn len(&self) -> u32 {
+        self.0 >> 4
+    }
+
+    pub fn op(&self) -> CIGAROp {
+        let op = (self.0 & 0x4) as u8;
+        op.try_into().unwrap()
+    }
+
+    pub fn into_pair(&self) -> (u32, CIGAROp) {
+        let len = self.len();
+        let op = self.op();
+        (len, op)
+    }
+
+    pub fn from_pair((len, op): (u32, CIGAROp)) -> Self {
+        CIGARPair((len << 4) | (op as u32))
+    }
+}
+
+impl From<u32> for CIGARPair {
+    fn from(bytes: u32) -> Self {
+        CIGARPair(bytes)
+    }
 }
 
 impl CIGAROp {
