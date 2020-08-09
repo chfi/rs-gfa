@@ -456,7 +456,6 @@ impl std::str::FromStr for CIGAROp {
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CIGAR(pub Vec<(u32, CIGAROp)>);
 
-#[allow(clippy::len_without_is_empty)]
 impl CIGAR {
     fn parse_op_cmd(input: &[u8]) -> IResult<&[u8], CIGAROp> {
         use nom::{branch::alt, combinator::map};
@@ -496,12 +495,16 @@ impl CIGAR {
         Self::parser(i).ok().map(|(_, cg)| cg)
     }
 
-    // NB No is_empty() method yet because I haven't decided on the
-    // semantics of an empty cigar string, such as "" vs "0M" vs "*"
     pub fn len(&self) -> usize {
         self.0
             .iter()
             .fold(0, |s, (op_len, _op)| s + *op_len as usize)
+    }
+
+    /// is_empty corresponds to whether or not the contained vector is
+    /// empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     /// Produces an iterator over the individual CIGAR operations in
@@ -561,6 +564,23 @@ impl CIGAR {
                 }
             })
             .unwrap_or_else(|x| x)
+    }
+
+    pub fn split_with_index(
+        &self,
+        (v_ix, o_ix): (usize, usize),
+    ) -> (Self, Self) {
+        let mut left_cg = self.0.clone();
+        let mut right_cg = left_cg.split_off(v_ix);
+
+        if o_ix != 0 {
+            if let Some(r_first) = right_cg.first_mut() {
+                let ix = o_ix as u32;
+                left_cg.push((ix, r_first.1));
+                r_first.0 -= ix;
+            }
+        }
+        (CIGAR(left_cg), CIGAR(right_cg))
     }
 
     /// Split a cigar at the provided index, returning two new cigars;
