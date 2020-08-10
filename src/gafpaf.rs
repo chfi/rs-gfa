@@ -541,11 +541,15 @@ impl CIGAR {
             .iter()
             .try_fold((0, i), |(v_ix, o_ix), (count, op)| {
                 let count = *count as usize;
-                if o_ix < count || v_ix >= self.0.len() {
-                    Err((v_ix, o_ix))
+                let (_, step) = op.step();
+                if step == 1 {
+                    if o_ix < count || v_ix >= self.0.len() {
+                        Err((v_ix, o_ix))
+                    } else {
+                        Ok((v_ix + step, o_ix - count))
+                    }
                 } else {
-                    let (step, _) = op.step();
-                    Ok((v_ix + step, o_ix - count))
+                    Ok((v_ix + 1, o_ix))
                 }
             })
             .unwrap_or_else(|x| x)
@@ -556,11 +560,15 @@ impl CIGAR {
             .iter()
             .try_fold((0, i), |(v_ix, o_ix), (count, op)| {
                 let count = *count as usize;
-                if o_ix < count || v_ix >= self.0.len() {
-                    Err((v_ix, o_ix))
+                let (step, _) = op.step();
+                if step == 1 {
+                    if o_ix < count || v_ix >= self.0.len() {
+                        Err((v_ix, o_ix))
+                    } else {
+                        Ok((v_ix + step, o_ix - count))
+                    }
                 } else {
-                    let (_, step) = op.step();
-                    Ok((v_ix + step, o_ix - count))
+                    Ok((v_ix + 1, o_ix))
                 }
             })
             .unwrap_or_else(|x| x)
@@ -902,5 +910,23 @@ mod tests {
         let (l, r) = cigar.split_at(85);
         assert_eq!("20M12D3M4N9S10H5P11=9X", l.to_string());
         assert_eq!("", r.to_string());
+    }
+
+    #[test]
+    fn indexing_test() {
+        let input = b"1M1I1M1I2M";
+        let (_i, cigar) = CIGAR::parser(input).unwrap();
+
+        let r_ix = cigar.ref_index(3);
+        let q_ix = cigar.query_index(3);
+
+        println!("ref:   {}, {}", r_ix.0, r_ix.1);
+        println!("query: {}, {}", q_ix.0, q_ix.1);
+
+        let r_cg = cigar.split_with_index(r_ix);
+        let q_cg = cigar.split_with_index(q_ix);
+
+        println!("ref:   {}, {}", r_cg.0, r_cg.1);
+        println!("query: {}, {}", q_cg.0, q_cg.1);
     }
 }
