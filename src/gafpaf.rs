@@ -595,43 +595,7 @@ impl CIGAR {
     /// e.g. splitting 4M at index 1 produces (1M, 3M); splitting
     /// 6M3I4D at index 8 produces (6M2I, 1I4D)
     pub fn split_at(&self, i: usize) -> (Self, Self) {
-        let (v_ix, o_ix) = self.index(i);
-        let mut left_cg = self.0.clone();
-        let mut right_cg = left_cg.split_off(v_ix);
-
-        if o_ix != 0 {
-            if let Some(r_first) = right_cg.first_mut() {
-                let ix = o_ix as u32;
-                left_cg.push((ix, r_first.1));
-                r_first.0 -= ix;
-            }
-        }
-        (CIGAR(left_cg), CIGAR(right_cg))
-    }
-
-    /// Given a starting query sequence offset and reference sequence
-    /// offset, shift the offsets according to the CIGAR operations.
-    pub fn align_offsets(
-        &self,
-        mut query_offset: usize,
-        mut ref_offset: usize,
-    ) -> (usize, usize) {
-        use CIGAROp::*;
-
-        for (steps, op) in self.0.iter() {
-            let steps = *steps as usize;
-            match op {
-                M | E | X => {
-                    query_offset += steps;
-                    ref_offset += steps;
-                }
-                I | S => query_offset += steps,
-                D | N => ref_offset += steps,
-                H | P => {}
-            }
-        }
-
-        (query_offset, ref_offset)
+        self.split_with_index(self.index(i))
     }
 }
 
