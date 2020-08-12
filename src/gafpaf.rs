@@ -419,17 +419,19 @@ impl CIGAROp {
         }
     }
 
-    /// The first coordinate in the return value corresponds to
-    /// whether or not the operation consumes the query sequence, the
-    /// second coordinate the reference sequence
-    fn step(&self) -> (usize, usize) {
+    pub fn consumes_query(&self) -> bool {
         use CIGAROp::*;
-
         match self {
-            M | E | X => (1, 1),
-            I | S => (1, 0),
-            D | N => (0, 1),
-            H | P => (0, 0),
+            M | E | X | I | S => true,
+            _ => false,
+        }
+    }
+
+    pub fn consumes_reference(&self) -> bool {
+        use CIGAROp::*;
+        match self {
+            M | E | X | D | N => true,
+            _ => false,
         }
     }
 }
@@ -541,12 +543,11 @@ impl CIGAR {
             .iter()
             .try_fold((0, i), |(v_ix, o_ix), (count, op)| {
                 let count = *count as usize;
-                let (_, step) = op.step();
-                if step == 1 {
+                if op.consumes_query() {
                     if o_ix < count || v_ix >= self.0.len() {
                         Err((v_ix, o_ix))
                     } else {
-                        Ok((v_ix + step, o_ix - count))
+                        Ok((v_ix + 1, o_ix - count))
                     }
                 } else {
                     Ok((v_ix + 1, o_ix))
@@ -560,12 +561,11 @@ impl CIGAR {
             .iter()
             .try_fold((0, i), |(v_ix, o_ix), (count, op)| {
                 let count = *count as usize;
-                let (step, _) = op.step();
-                if step == 1 {
+                if op.consumes_reference() {
                     if o_ix < count || v_ix >= self.0.len() {
                         Err((v_ix, o_ix))
                     } else {
-                        Ok((v_ix + step, o_ix - count))
+                        Ok((v_ix + 1, o_ix - count))
                     }
                 } else {
                     Ok((v_ix + 1, o_ix))
@@ -727,10 +727,6 @@ mod tests {
         let (i, s) = GAFStep::parse_step(with_tab).unwrap();
         assert_eq!(b"\t266", i);
         assert_eq!(SegId(Backward, "s2".into()), s);
-
-        // Must start with > or <
-
-        // If the ID is followed by a :, that must be followed by an interval
     }
 
     #[test]
