@@ -434,6 +434,14 @@ impl CIGAROp {
             _ => false,
         }
     }
+
+    pub fn is_match_or_mismatch(&self) -> bool {
+        use CIGAROp::*;
+        match self {
+            M | E | X => true,
+            _ => false,
+        }
+    }
 }
 
 impl std::fmt::Display for CIGAROp {
