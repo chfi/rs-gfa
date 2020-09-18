@@ -350,6 +350,23 @@ where
     RE.find(next.as_ref()).map(|s| BString::from(s.as_bytes()))
 }
 
+impl<N: SegmentId, T: OptFields> Segment<N, T> {
+    fn parse_line_<I>(mut input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        let name = N::parse_id(&mut input)?;
+        let sequence = parse_sequence(&mut input)?;
+        let optional = T::parse(input);
+        Some(Segment {
+            name,
+            sequence,
+            optional,
+        })
+    }
+}
+
 impl<T: OptFields> ParseGFA for Segment<BString, T> {
     fn parse_line<I>(mut input: I) -> Option<Self>
     where
@@ -362,6 +379,31 @@ impl<T: OptFields> ParseGFA for Segment<BString, T> {
         Some(Segment {
             name,
             sequence,
+            optional,
+        })
+    }
+}
+
+impl<N: SegmentId, T: OptFields> Link<N, T> {
+    fn parse_line_<I>(mut input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        use Orientation as O;
+        let from_segment = N::parse_id(&mut input)?;
+        let from_orient = input.next().and_then(O::from_bytes)?;
+        let to_segment = N::parse_id(&mut input)?;
+        let to_orient = input.next().and_then(O::from_bytes)?;
+        let overlap = input.next()?.as_ref().into();
+
+        let optional = T::parse(input);
+        Some(Link {
+            from_segment,
+            from_orient,
+            to_segment,
+            to_orient,
+            overlap,
             optional,
         })
     }
@@ -387,6 +429,38 @@ impl<T: OptFields> ParseGFA for Link<BString, T> {
             to_segment,
             to_orient,
             overlap,
+            optional,
+        })
+    }
+}
+
+impl<N: SegmentId, T: OptFields> Containment<N, T> {
+    fn parse_line_<I>(mut input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        use std::str::from_utf8;
+        use Orientation as O;
+
+        let container_name = N::parse_id(&mut input)?;
+        let container_orient = input.next().and_then(O::from_bytes)?;
+        let contained_name = N::parse_id(&mut input)?;
+        let contained_orient = input.next().and_then(O::from_bytes)?;
+
+        let pos = input.next()?;
+        let pos = from_utf8(pos.as_ref()).ok().and_then(|p| p.parse().ok())?;
+
+        let overlap = input.next()?.as_ref().into();
+
+        let optional = T::parse(input);
+        Some(Containment {
+            container_name,
+            container_orient,
+            contained_name,
+            contained_orient,
+            overlap,
+            pos,
             optional,
         })
     }
@@ -419,6 +493,35 @@ impl<T: OptFields> ParseGFA for Containment<BString, T> {
             contained_orient,
             overlap,
             pos,
+            optional,
+        })
+    }
+}
+
+impl<T: OptFields> Path<T> {
+    fn parse_line_<I>(mut input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        let path_name = parse_name(&mut input)?;
+
+        let segment_names =
+            input.next().map(|bs| BString::from(bs.as_ref()))?;
+
+        let overlaps = input
+            .next()?
+            .as_ref()
+            .split_str(b",")
+            .map(BString::from)
+            .collect();
+
+        let optional = T::parse(input);
+
+        Some(Path {
+            path_name,
+            segment_names,
+            overlaps,
             optional,
         })
     }
