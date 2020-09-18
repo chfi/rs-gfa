@@ -224,6 +224,24 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         }
     }
 
+    pub fn parse_lines<I>(&self, lines: I) -> GFAResult<GFA<N, T>>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        let mut gfa = GFA::new();
+
+        for line in lines {
+            match self.parse_line_with_error(line.as_ref()) {
+                Ok(parsed) => gfa.insert_line(parsed),
+                Err(err) if err.can_safely_continue() => (),
+                Err(err) => return Err(err),
+            };
+        }
+
+        Ok(gfa)
+    }
+
     pub fn parse_file<P: AsRef<std::path::Path>>(
         &self,
         path: P,

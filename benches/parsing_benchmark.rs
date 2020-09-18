@@ -20,21 +20,8 @@ fn load_lines(path: &PathBuf) -> io::Result<Vec<Vec<u8>>> {
 }
 
 fn parse_lines<T: OptFields>(input: &[Vec<u8>]) -> GFA<BString, T> {
-    let parser: GFAParser<T> = GFAParser::new();
-
-    let mut gfa: GFA<BString, T> = GFA::new();
-
-    for line in input.iter() {
-        match parser.parse_line(line[..].as_ref()) {
-            Some(Line::Segment(s)) => gfa.segments.push(s),
-            Some(Line::Link(l)) => gfa.links.push(l),
-            Some(Line::Containment(c)) => gfa.containments.push(c),
-            Some(Line::Path(p)) => gfa.paths.push(p),
-            _ => (),
-        }
-    }
-
-    gfa
+    let parser: GFAParser<BString, T> = GFAParser::new();
+    parser.parse_lines(input.iter()).unwrap()
 }
 
 fn parse_lines_noopt(input: &[Vec<u8>]) -> GFA<BString, ()> {
@@ -43,6 +30,19 @@ fn parse_lines_noopt(input: &[Vec<u8>]) -> GFA<BString, ()> {
 
 fn parse_lines_withopt(input: &[Vec<u8>]) -> GFA<BString, OptionalFields> {
     parse_lines(input)
+}
+
+fn parse_lines_usize<T: OptFields>(input: &[Vec<u8>]) -> GFA<usize, T> {
+    let parser: GFAParser<usize, T> = GFAParser::new();
+    parser.parse_lines(input.iter()).unwrap()
+}
+
+fn parse_lines_usize_noopt(input: &[Vec<u8>]) -> GFA<usize, ()> {
+    parse_lines_usize(input)
+}
+
+fn parse_lines_usize_withopt(input: &[Vec<u8>]) -> GFA<usize, OptionalFields> {
+    parse_lines_usize(input)
 }
 
 static GFAPATH: &str = "./test/gfas/";
