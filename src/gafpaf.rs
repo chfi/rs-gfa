@@ -370,7 +370,7 @@ impl CIGARPair {
         op.try_into().unwrap()
     }
 
-    pub fn into_pair(&self) -> (u32, CIGAROp) {
+    pub fn into_pair(self) -> (u32, CIGAROp) {
         let len = self.len();
         let op = self.op();
         (len, op)

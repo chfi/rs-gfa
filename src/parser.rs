@@ -155,12 +155,18 @@ pub struct GFAParser<N: SegmentId, T: OptFields> {
     _segment_names: std::marker::PhantomData<N>,
 }
 
+impl<N: SegmentId, T: OptFields> Default for GFAParser<N, T> {
+    fn default() -> Self {
+        let config = GFAParserBuilder::all();
+        config.build()
+    }
+}
+
 impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
     /// Create a new GFAParser that will parse all four GFA line
     /// types, and use the optional fields parser and storage `T`.
     pub fn new() -> Self {
-        let config = GFAParserBuilder::all();
-        config.build()
+        Default::default()
     }
 
     /// Filters a line before parsing, only passing through the lines
