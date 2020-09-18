@@ -7,6 +7,78 @@ use crate::optfields::*;
 
 type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
 
+#[derive(Debug, Clone)]
+pub enum ParseFieldError {
+    /// A segment ID couldn't be parsed as a usize. Can only happen
+    /// when parsing into a GFA<usize, T>.
+    UsizeIdError,
+    /// A bytestring couldn't be parsed as a bytestring, can happen
+    /// when the contents aren't UTF8.
+    BStringUtf8Error,
+    /// Attempted to parse an orientation that wasn't + or -.
+    OrientationError,
+    /// A required field was incorrectly formatted. Includes the field
+    /// name as defined by the GFA1 spec.
+    InvalidField(&'static str),
+    MissingFields,
+    Other,
+}
+
+/// Type encapsulating different kinds of GFA parsing errors
+#[derive(Debug)]
+pub enum ParseError {
+    /// The line type was something other than 'H', 'S', 'L', 'C', or
+    /// 'P'. This is ignored by the file parser rather than a fail
+    /// condition.
+    UnknownLineType,
+    /// Tried to parse an empty line. Can be ignored.
+    EmptyLine,
+    /// A line couldn't be parsed. Includes the problem line and a
+    /// variant describing the error.
+    InvalidLine(ParseFieldError, String),
+    InvalidField(ParseFieldError),
+    /// Wrapper for an IO error.
+    IOError(std::io::Error),
+
+    Other,
+}
+
+type GFAFieldResult<T> = Result<T, ParseFieldError>;
+type GFAResult<T> = Result<T, ParseError>;
+
+impl From<std::io::Error> for ParseError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IOError(err)
+    }
+}
+
+impl ParseError {
+    pub fn other() -> Self {
+        Self::Other
+    }
+
+    pub(crate) fn invalid_line(error: ParseFieldError, line: &[u8]) -> Self {
+        let s = std::str::from_utf8(line).unwrap();
+        Self::InvalidLine(error, s.into())
+    }
+
+    pub fn break_if_necessary(self) -> GFAResult<()> {
+        if self.can_safely_continue() {
+            Ok(())
+        } else {
+            Err(self)
+        }
+    }
+
+    pub const fn can_safely_continue(&self) -> bool {
+        match self {
+            ParseError::EmptyLine => true,
+            ParseError::UnknownLineType => true,
+            _ => false,
+        }
+    }
+}
+
 /// Builder struct for GFAParsers
 pub struct GFAParserBuilder {
     pub segments: bool,
@@ -106,11 +178,13 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
             let mut fields = line.split_str(b"\t");
             let hdr = fields.next()?;
             match hdr {
-                b"H" => Header::parse_line(fields).map(Header::wrap),
-                b"S" => Segment::parse_line(fields).map(Segment::wrap),
-                b"L" => Link::parse_line(fields).map(Link::wrap),
-                b"C" => Containment::parse_line(fields).map(Containment::wrap),
-                b"P" => Path::parse_line(fields).map(Path::wrap),
+                b"H" => Header::parse_line(fields).ok().map(Header::wrap),
+                b"S" => Segment::parse_line(fields).ok().map(Segment::wrap),
+                b"L" => Link::parse_line(fields).ok().map(Link::wrap),
+                b"C" => {
+                    Containment::parse_line(fields).ok().map(Containment::wrap)
+                }
+                b"P" => Path::parse_line(fields).ok().map(Path::wrap),
                 _ => None,
             }
         } else {
@@ -118,8 +192,38 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         }
     }
 
-    /// Convenience function for parsing a .gfa file. Opens the file
-    /// at the provided path and reads it line-by-line.
+    pub fn parse_line_with_error(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Line<N, T>, ParseError> {
+        let line: &BStr = bytes.trim().as_ref();
+
+        let mut fields = line.split_str(b"\t");
+        let hdr = fields.next().ok_or(ParseError::EmptyLine)?;
+
+        let invalid_line =
+            |e: ParseFieldError| ParseError::invalid_line(e, bytes);
+
+        match hdr {
+            b"H" => Header::parse_line(fields)
+                .map(Header::wrap)
+                .map_err(invalid_line),
+            b"S" => Segment::parse_line(fields)
+                .map(Segment::wrap)
+                .map_err(invalid_line),
+            b"L" => Link::parse_line(fields)
+                .map(Link::wrap)
+                .map_err(invalid_line),
+            b"C" => Containment::parse_line(fields)
+                .map(Containment::wrap)
+                .map_err(invalid_line),
+            b"P" => Path::parse_line(fields)
+                .map(Path::wrap)
+                .map_err(invalid_line),
+            _ => Err(ParseError::UnknownLineType),
+        }
+    }
+
     pub fn parse_file<P: AsRef<std::path::Path>>(
         &self,
         path: P,
@@ -136,13 +240,33 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
 
         for line in lines {
             let line = line?;
-            if let Some(line) = self.parse_line(line.as_ref()) {
-                gfa.insert_line(line);
-            }
+            match self.parse_line_with_error(line.as_ref()) {
+                Ok(parsed) => gfa.insert_line(parsed),
+                Err(err) if err.can_safely_continue() => (),
+                Err(err) => return Err(err),
+            };
         }
 
         Ok(gfa)
     }
+}
+
+fn next_field<I, P>(mut input: I) -> GFAFieldResult<P>
+where
+    I: Iterator<Item = P>,
+    P: AsRef<[u8]>,
+{
+    input.next().ok_or(ParseFieldError::MissingFields)
+}
+
+fn parse_orientation<I>(mut input: I) -> GFAFieldResult<Orientation>
+where
+    I: Iterator,
+    I::Item: AsRef<[u8]>,
+{
+    let next = next_field(&mut input)?;
+    let parsed = Orientation::from_bytes_plus_minus(next.as_ref());
+    Orientation::parse_error(parsed)
 }
 
 impl<T: OptFields> Header<T> {
@@ -150,27 +274,28 @@ impl<T: OptFields> Header<T> {
         Line::Header(self)
     }
 
-    fn parse_line<I>(mut input: I) -> Option<Self>
+    fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let next = input.next()?;
-        let version = OptField::parse(next.as_ref())?;
+        let next = input.next().ok_or(ParseFieldError::MissingFields)?;
+        let version = OptField::parse(next.as_ref())
+            .ok_or(ParseFieldError::MissingFields)?;
         let optional = T::parse(input);
 
         if let OptFieldVal::Z(version) = version.value {
-            Some(Header {
+            Ok(Header {
                 version: Some(version),
                 optional,
             })
         } else {
-            None
+            Err(ParseFieldError::Other)
         }
     }
 }
 
-fn parse_sequence<I>(input: &mut I) -> Option<BString>
+fn parse_sequence<I>(input: &mut I) -> GFAFieldResult<BString>
 where
     I: Iterator,
     I::Item: AsRef<[u8]>,
@@ -179,8 +304,10 @@ where
         static ref RE: Regex = Regex::new(r"(?-u)\*|[A-Za-z=.]+").unwrap();
     }
 
-    let next = input.next()?;
-    RE.find(next.as_ref()).map(|s| BString::from(s.as_bytes()))
+    let next = input.next().ok_or(ParseFieldError::MissingFields)?;
+    RE.find(next.as_ref())
+        .map(|s| BString::from(s.as_bytes()))
+        .ok_or(ParseFieldError::InvalidField("Sequence"))
 }
 
 impl<N: SegmentId, T: OptFields> Segment<N, T> {
@@ -188,15 +315,17 @@ impl<N: SegmentId, T: OptFields> Segment<N, T> {
         Line::Segment(self)
     }
 
-    fn parse_line<I>(mut input: I) -> Option<Self>
+    fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let name = N::parse_next(&mut input)?;
+        // let name = N::parse_next(&mut input).ok_or(?;
+
+        let name = N::parse_next_result(&mut input)?;
         let sequence = parse_sequence(&mut input)?;
         let optional = T::parse(input);
-        Some(Segment {
+        Ok(Segment {
             name,
             sequence,
             optional,
@@ -209,20 +338,20 @@ impl<N: SegmentId, T: OptFields> Link<N, T> {
         Line::Link(self)
     }
 
-    fn parse_line<I>(mut input: I) -> Option<Self>
+    fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        use Orientation as O;
-        let from_segment = N::parse_next(&mut input)?;
-        let from_orient = input.next().and_then(O::from_bytes_plus_minus)?;
-        let to_segment = N::parse_next(&mut input)?;
-        let to_orient = input.next().and_then(O::from_bytes_plus_minus)?;
-        let overlap = input.next()?.as_ref().into();
+        let from_segment = N::parse_next_result(&mut input)?;
+        let from_orient = parse_orientation(&mut input)?;
+        let to_segment = N::parse_next_result(&mut input)?;
+        let to_orient = parse_orientation(&mut input)?;
+
+        let overlap = next_field(&mut input)?.as_ref().into();
 
         let optional = T::parse(input);
-        Some(Link {
+        Ok(Link {
             from_segment,
             from_orient,
             to_segment,
@@ -238,34 +367,36 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
         Line::Containment(self)
     }
 
-    fn parse_line<I>(mut input: I) -> Option<Self>
+    fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
         use std::str::from_utf8;
-        use Orientation as O;
 
-        let container_name = N::parse_next(&mut input)?;
-        let container_orient =
-            input.next().and_then(O::from_bytes_plus_minus)?;
-        let contained_name = N::parse_next(&mut input)?;
-        let contained_orient =
-            input.next().and_then(O::from_bytes_plus_minus)?;
+        let container_name = N::parse_next_result(&mut input)?;
+        let container_orient = parse_orientation(&mut input)?;
+        // input.next().and_then(O::from_bytes_plus_minus)?;
+        let contained_name = N::parse_next_result(&mut input)?;
+        let contained_orient = parse_orientation(&mut input)?;
+        // input.next().and_then(O::from_bytes_plus_minus)?;
 
-        let pos = input.next()?;
-        let pos = from_utf8(pos.as_ref()).ok().and_then(|p| p.parse().ok())?;
+        let next = next_field(&mut input)?;
+        // input.next()?;
+        let pos = from_utf8(next.as_ref()).ok().and_then(|p| p.parse().ok());
 
-        let overlap = input.next()?.as_ref().into();
+        let parsed_pos = pos.ok_or(ParseFieldError::BStringUtf8Error)?;
+
+        let overlap = next_field(&mut input)?.as_ref().into();
 
         let optional = T::parse(input);
-        Some(Containment {
+        Ok(Containment {
             container_name,
             container_orient,
             contained_name,
             contained_orient,
             overlap,
-            pos,
+            pos: parsed_pos,
             optional,
         })
     }
@@ -276,28 +407,37 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
         Line::Path(self)
     }
 
-    fn parse_line<I>(mut input: I) -> Option<Self>
+    fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
         // Use the SegmentId parser for the path name as well; it's
         // just always BString
-        let path_name = BString::parse_next(&mut input)?;
+        // let path_name = BString::parse_next(&mut input)?;
+        let path_name = BString::parse_next_result(&mut input)?;
 
-        let segment_names =
-            input.next().map(|bs| BString::from(bs.as_ref()))?;
+        // let next = next_field(&mut input)?;
+        let segment_names = next_field(&mut input)
+            // .as_ref()
+            .map(|bs| BString::from(bs.as_ref()))?;
+        // input.next().map(|bs| BString::from(bs.as_ref()))?;
 
-        let overlaps = input
-            .next()?
+        let overlaps = next_field(&mut input)?
             .as_ref()
             .split_str(b",")
             .map(BString::from)
             .collect();
+        // let overlaps = input
+        //     .next()?
+        //     .as_ref()
+        //     .split_str(b",")
+        //     .map(BString::from)
+        //     .collect();
 
         let optional = T::parse(input);
 
-        Some(Path::new(path_name, segment_names, overlaps, optional))
+        Ok(Path::new(path_name, segment_names, overlaps, optional))
     }
 }
 
@@ -313,13 +453,14 @@ mod tests {
             optional: (),
         };
 
-        let result: Option<Header<()>> = Header::parse_line([hdr].iter());
+        let result: GFAFieldResult<Header<()>> =
+            Header::parse_line([hdr].iter());
 
         match result {
-            None => {
+            Err(_) => {
                 panic!("Error parsing header");
             }
-            Some(h) => assert_eq!(h, hdr_),
+            Ok(h) => assert_eq!(h, hdr_),
         }
     }
 
@@ -339,10 +480,10 @@ mod tests {
         let result = Link::parse_line(fields);
 
         match result {
-            None => {
+            Err(_) => {
                 panic!("Error parsing link");
             }
-            Some(l) => assert_eq!(l, link_),
+            Ok(l) => assert_eq!(l, link_),
         }
     }
 
@@ -363,10 +504,10 @@ mod tests {
         let fields = cont.split_terminator('\t');
         let result = Containment::parse_line(fields);
         match result {
-            None => {
+            Err(_) => {
                 panic!("Error parsing containment");
             }
-            Some(c) => assert_eq!(c, cont_),
+            Ok(c) => assert_eq!(c, cont_),
         }
     }
 
@@ -386,10 +527,10 @@ mod tests {
         let result = Path::parse_line(fields);
 
         match result {
-            None => {
+            Err(_) => {
                 panic!("Error parsing path");
             }
-            Some(p) => assert_eq!(p, path_),
+            Ok(p) => assert_eq!(p, path_),
         }
     }
 
@@ -431,16 +572,17 @@ mod tests {
         .into_iter()
         .collect();
 
-        let segment_1: Option<Segment<BString, ()>> =
+        let segment_1: GFAFieldResult<Segment<BString, ()>> =
             Segment::parse_line(fields.clone());
 
+        assert!(segment_1.is_ok());
         assert_eq!(
-            Some(Segment {
+            Segment {
                 name: BString::from(name),
                 sequence: BString::from(seq),
                 optional: ()
-            }),
-            segment_1
+            },
+            segment_1.unwrap(),
         );
 
         let segment_2: Segment<BString, OptionalFields> =

@@ -4,10 +4,13 @@ use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::optfields::*;
+use crate::parser::ParseFieldError;
 
 /// Trait for the types that can be parsed and used as segment IDs;
 /// will probably only be usize and BString
 pub trait SegmentId: Sized + Default {
+    fn error() -> ParseFieldError;
+
     fn parse_id(input: &[u8]) -> Option<Self>;
 
     fn parse_next<I>(mut input: I) -> Option<Self>
@@ -18,9 +21,22 @@ pub trait SegmentId: Sized + Default {
         let next = input.next()?;
         Self::parse_id(next.as_ref())
     }
+
+    fn parse_next_result<I>(input: I) -> Result<Self, ParseFieldError>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        Self::parse_next(input).ok_or_else(Self::error)
+    }
 }
 
 impl SegmentId for usize {
+    #[inline]
+    fn error() -> ParseFieldError {
+        ParseFieldError::UsizeIdError
+    }
+
     fn parse_id(input: &[u8]) -> Option<Self> {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"(?-u)[0-9]+").unwrap();
@@ -33,6 +49,11 @@ impl SegmentId for usize {
 }
 
 impl SegmentId for BString {
+    #[inline]
+    fn error() -> ParseFieldError {
+        ParseFieldError::BStringUtf8Error
+    }
+
     fn parse_id(input: &[u8]) -> Option<Self> {
         lazy_static! {
             static ref RE: Regex =
@@ -320,20 +341,6 @@ impl<T: OptFields> Path<BString, T> {
     }
 }
 
-/// Parses a segment in a Path's segment_names into a segment name and
-/// orientation
-fn parse_path_segment(input: &[u8]) -> (&'_ BStr, Orientation) {
-    use Orientation::*;
-    let last = input.len() - 1;
-    let orient = match input[last] {
-        b'+' => Forward,
-        b'-' => Backward,
-        _ => panic!("Path segment did not include orientation"),
-    };
-    let seg = &input[..last];
-    (seg.as_ref(), orient)
-}
-
 impl<T: OptFields> Path<BString, T> {
     /// Produces an iterator over the segments of the given path,
     /// parsing the orientation and producing a slice to each segment
@@ -384,6 +391,10 @@ impl Orientation {
             b"-" => Some(Orientation::Backward),
             _ => None,
         }
+    }
+
+    pub fn parse_error(opt: Option<Self>) -> Result<Self, ParseFieldError> {
+        opt.ok_or(ParseFieldError::OrientationError)
     }
 
     pub fn write_plus_minus(
