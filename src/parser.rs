@@ -7,47 +7,6 @@ use crate::optfields::*;
 
 type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
 
-/// Trait for the types that can be parsed and used as segment IDs;
-/// will probably only be usize and BString
-pub trait SegmentId: Sized {
-    fn parse_id<I>(input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>;
-}
-
-impl SegmentId for usize {
-    fn parse_id<I>(mut input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"(?-u)[0-9]+").unwrap();
-        }
-        let next = input.next()?;
-        RE.find(next.as_ref()).map(|bs| {
-            let s = std::str::from_utf8(bs.as_bytes()).unwrap();
-            s.parse::<usize>().unwrap()
-        })
-    }
-}
-
-impl SegmentId for BString {
-    fn parse_id<I>(mut input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"(?-u)\*|[A-Za-z=.]+").unwrap();
-        }
-
-        let next = input.next()?;
-        RE.find(next.as_ref()).map(|s| BString::from(s.as_bytes()))
-    }
-}
-
 /// Builder struct for GFAParsers
 pub struct GFAParserBuilder {
     pub segments: bool,
@@ -356,7 +315,7 @@ impl<N: SegmentId, T: OptFields> Segment<N, T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let name = N::parse_id(&mut input)?;
+        let name = N::parse_next(&mut input)?;
         let sequence = parse_sequence(&mut input)?;
         let optional = T::parse(input);
         Some(Segment {
@@ -391,9 +350,9 @@ impl<N: SegmentId, T: OptFields> Link<N, T> {
         I::Item: AsRef<[u8]>,
     {
         use Orientation as O;
-        let from_segment = N::parse_id(&mut input)?;
+        let from_segment = N::parse_next(&mut input)?;
         let from_orient = input.next().and_then(O::from_bytes)?;
-        let to_segment = N::parse_id(&mut input)?;
+        let to_segment = N::parse_next(&mut input)?;
         let to_orient = input.next().and_then(O::from_bytes)?;
         let overlap = input.next()?.as_ref().into();
 
@@ -443,9 +402,9 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
         use std::str::from_utf8;
         use Orientation as O;
 
-        let container_name = N::parse_id(&mut input)?;
+        let container_name = N::parse_next(&mut input)?;
         let container_orient = input.next().and_then(O::from_bytes)?;
-        let contained_name = N::parse_id(&mut input)?;
+        let contained_name = N::parse_next(&mut input)?;
         let contained_orient = input.next().and_then(O::from_bytes)?;
 
         let pos = input.next()?;

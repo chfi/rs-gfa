@@ -257,7 +257,7 @@ where
     let (query_seq_name, query_seq_len, query_seq_range) =
         parse_seq_fields(&mut input)?;
 
-    let strand = input.next().and_then(Orientation::from_bytes)?;
+    let strand = input.next().and_then(Orientation::from_bytes_plus_minus)?;
 
     let (target_seq_name, target_seq_len, target_seq_range) =
         parse_seq_fields(&mut input)?;

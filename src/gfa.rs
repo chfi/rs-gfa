@@ -1,7 +1,46 @@
 use bstr::{BStr, BString, ByteSlice};
+use lazy_static::lazy_static;
+use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::optfields::*;
+
+/// Trait for the types that can be parsed and used as segment IDs;
+/// will probably only be usize and BString
+pub trait SegmentId: Sized {
+    fn parse_id(input: &[u8]) -> Option<Self>;
+
+    fn parse_next<I>(mut input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        let next = input.next()?;
+        Self::parse_id(next.as_ref())
+    }
+}
+
+impl SegmentId for usize {
+    fn parse_id(input: &[u8]) -> Option<Self> {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(?-u)[0-9]+").unwrap();
+        }
+        RE.find(input).map(|bs| {
+            let s = std::str::from_utf8(bs.as_bytes()).unwrap();
+            s.parse::<usize>().unwrap()
+        })
+    }
+}
+
+impl SegmentId for BString {
+    fn parse_id(input: &[u8]) -> Option<Self> {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(?-u)\*|[A-Za-z=.]+").unwrap();
+        }
+
+        RE.find(input).map(|s| BString::from(s.as_bytes()))
+    }
+}
 
 /// This module defines the various GFA line types, the GFA object,
 /// and some utility functions and types.
@@ -14,7 +53,7 @@ pub struct GFA<N, T: OptFields> {
     pub segments: Vec<Segment<N, T>>,
     pub links: Vec<Link<N, T>>,
     pub containments: Vec<Containment<N, T>>,
-    pub paths: Vec<Path<T>>,
+    pub paths: Vec<Path<N, T>>,
 }
 
 impl<N, T: OptFields> GFA<N, T> {
@@ -60,11 +99,8 @@ impl<T: OptFields> GFA<BString, T> {
         }
 
         for path in self.paths.iter() {
-            if path.usize_segments() {
-                gfa.paths.push(path.clone());
-            } else {
-                return None;
-            }
+            let new_path = path.usize_path()?;
+            gfa.paths.push(new_path);
         }
 
         Some(gfa)
@@ -99,7 +135,7 @@ pub enum Line<N, T: OptFields> {
     Segment(Segment<N, T>),
     Link(Link<N, T>),
     Containment(Containment<N, T>),
-    Path(Path<T>),
+    Path(Path<N, T>),
 }
 
 /// The header line of a GFA graph
@@ -223,45 +259,66 @@ impl<T: OptFields> Containment<BString, T> {
 #[derive(
     Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
 )]
-pub struct Path<T: OptFields> {
+pub struct Path<N, T: OptFields> {
     pub path_name: BString,
     pub segment_names: BString,
     pub overlaps: Vec<BString>,
     pub optional: T,
+    _segment_names: std::marker::PhantomData<N>,
 }
 
-impl<T: OptFields> Path<T> {
+impl<N: SegmentId, T: OptFields> Path<N, T> {
+    pub fn new(
+        path_name: BString,
+        segment_names: BString,
+        overlaps: Vec<BString>,
+        optional: T,
+    ) -> Self {
+        Path {
+            path_name,
+            segment_names,
+            overlaps,
+            optional,
+            _segment_names: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<N: SegmentId, T: OptFields> Path<N, T> {
+    /// Parses (and copies!) a segment ID in the path segment list
+    pub fn parse_segment_id(input: &[u8]) -> Option<(N, Orientation)> {
+        use Orientation::*;
+        let last = input.len() - 1;
+        let orient = match input[last] {
+            b'+' => Forward,
+            b'-' => Backward,
+            _ => panic!("Path segment did not include orientation"),
+        };
+        let seg = &input[..last];
+        let id = N::parse_id(seg)?;
+        Some((id, orient))
+    }
+}
+
+impl<T: OptFields> Path<BString, T> {
     /// `true` if each of the segment names of the path can be parsed to `usize`
     pub fn usize_segments(&self) -> bool {
         self.iter()
             .all(|(seg, _)| seg.iter().all(|b| b.is_ascii_digit()))
     }
-}
 
-/*
-pub enum PathSegments {
-    Unparsed(BString),
-    Parsed(Vec<(BString, Orientation)>),
-}
-
-impl PathSegments {
-    /// Produces an iterator over the parsed segments of the given path
-    pub fn iter<'a>(
-        &'a self,
-    ) -> Box<dyn Iterator<Item = (&'a BStr, Orientation)> + 'a> {
-        match self {
-            PathSegments::Unparsed(bs) => {
-                let iter: _ = bs.split_str(b",").map(parse_path_segment);
-                Box::new(iter)
-            }
-            PathSegments::Parsed(steps) => {
-                let iter: _ = steps.iter().map(|(b, o)| (b.as_ref(), *o));
-                Box::new(iter)
-            }
-        }
+    pub fn segment_id_ref(input: &[u8]) -> (&'_ BStr, Orientation) {
+        use Orientation::*;
+        let last = input.len() - 1;
+        let orient = match input[last] {
+            b'+' => Forward,
+            b'-' => Backward,
+            _ => panic!("Path segment did not include orientation"),
+        };
+        let seg = &input[..last];
+        (seg.as_ref(), orient)
     }
 }
-*/
 
 /// Parses a segment in a Path's segment_names into a segment name and
 /// orientation
@@ -277,10 +334,37 @@ fn parse_path_segment(input: &[u8]) -> (&'_ BStr, Orientation) {
     (seg.as_ref(), orient)
 }
 
-impl<T: OptFields> Path<T> {
-    /// Produces an iterator over the parsed segments of the given path
+impl<T: OptFields> Path<BString, T> {
+    /// Produces an iterator over the segments of the given path,
+    /// parsing the orientation and producing a slice to each segment
+    /// name
     pub fn iter(&self) -> impl Iterator<Item = (&'_ BStr, Orientation)> {
-        self.segment_names.split_str(b",").map(parse_path_segment)
+        self.segment_names.split_str(b",").map(Self::segment_id_ref)
+    }
+
+    pub fn usize_path(&self) -> Option<Path<usize, T>> {
+        if self.usize_segments() {
+            Some(Path::new(
+                self.path_name.clone(),
+                self.segment_names.clone(),
+                self.overlaps.clone(),
+                self.optional.clone(),
+            ))
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: OptFields> Path<usize, T> {
+    /// Produces an iterator over the usize segments of the given
+    /// path.
+    pub fn iter<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (usize, Orientation)> + 'a {
+        self.segment_names
+            .split_str(b",")
+            .filter_map(Self::parse_segment_id)
     }
 }
 
@@ -382,12 +466,12 @@ mod tests {
     #[test]
     fn path_iter() {
         use Orientation::*;
-        let path = Path {
-            path_name: "14".into(),
-            segment_names: "11+,12-,13+".into(),
-            overlaps: vec!["4M".into(), "5M".into()],
-            optional: (),
-        };
+        let path: Path<BString, _> = Path::new(
+            "14".into(),
+            "11+,12-,13+".into(),
+            vec!["4M".into(), "5M".into()],
+            (),
+        );
         let mut path_iter = path.iter();
         assert_eq!(Some(("11".into(), Forward)), path_iter.next());
         assert_eq!(Some(("12".into(), Backward)), path_iter.next());

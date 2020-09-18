@@ -58,7 +58,7 @@ fn write_link<N: Display, T: Write, U: OptFields>(
 }
 
 // Write path
-fn write_path<U: OptFields, T: Write>(path: &Path<U>, stream: &mut T) {
+fn write_path<N, U: OptFields, T: Write>(path: &Path<N, U>, stream: &mut T) {
     write!(stream, "P\t{}\t", path.path_name)
         .expect("Error writing path to stream");
 
@@ -140,12 +140,12 @@ mod tests {
 
     #[test]
     fn print_path() {
-        let path = Path {
-            path_name: "path1".into(),
-            segment_names: "13+,51-,241+".into(),
-            overlaps: vec!["8M".into(), "1M".into(), "3M".into()],
-            optional: (),
-        };
+        let path: Path<BString, _> = Path::new(
+            "path1".into(),
+            "13+,51-,241+".into(),
+            vec!["8M".into(), "1M".into(), "3M".into()],
+            (),
+        );
 
         let mut string = String::new();
         write_path(&path, &mut string);
