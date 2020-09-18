@@ -7,7 +7,7 @@ use crate::optfields::*;
 
 /// Trait for the types that can be parsed and used as segment IDs;
 /// will probably only be usize and BString
-pub trait SegmentId: Sized {
+pub trait SegmentId: Sized + Default {
     fn parse_id(input: &[u8]) -> Option<Self>;
 
     fn parse_next<I>(mut input: I) -> Option<Self>
@@ -35,9 +35,9 @@ impl SegmentId for usize {
 impl SegmentId for BString {
     fn parse_id(input: &[u8]) -> Option<Self> {
         lazy_static! {
-            static ref RE: Regex = Regex::new(r"(?-u)\*|[A-Za-z=.]+").unwrap();
+            static ref RE: Regex =
+                Regex::new(r"(?-u)[!-)+-<>-~][!-~]*").unwrap();
         }
-
         RE.find(input).map(|s| BString::from(s.as_bytes()))
     }
 }
@@ -122,7 +122,7 @@ pub fn gfa_into_iter<N, T: OptFields>(
     segs.chain(links).chain(conts).chain(paths)
 }
 
-impl<N: Default, T: OptFields> GFA<N, T> {
+impl<N: SegmentId, T: OptFields> GFA<N, T> {
     pub fn new() -> Self {
         Default::default()
     }

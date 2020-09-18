@@ -36,20 +36,20 @@ impl GFAParserBuilder {
         }
     }
 
-    pub fn build<N: SegmentId, T: OptFields>(self) -> NewGFAParser<N, T> {
+    pub fn build<N: SegmentId, T: OptFields>(self) -> GFAParser<N, T> {
         let filter = self.make_filter();
-        NewGFAParser {
+        GFAParser {
             filter,
             _optional_fields: std::marker::PhantomData,
             _segment_names: std::marker::PhantomData,
         }
     }
 
-    pub fn build_usize_id<T: OptFields>(self) -> NewGFAParser<usize, T> {
+    pub fn build_usize_id<T: OptFields>(self) -> GFAParser<usize, T> {
         self.build()
     }
 
-    pub fn build_bstr_id<T: OptFields>(self) -> NewGFAParser<BString, T> {
+    pub fn build_bstr_id<T: OptFields>(self) -> GFAParser<BString, T> {
         self.build()
     }
 
@@ -77,38 +77,18 @@ impl GFAParserBuilder {
     }
 }
 
-/// GFAParser encapsulates a parsing configuration, which is currently
-/// limited to filtering based on line type, and the choice of
-/// optional fields storage (see optfields.rs). Will likely become
-/// generic over the `N` type in `GFA<N, T: OptFields>`, but for now
-/// the parser only produces GFA lines with BString segment names.
-pub struct GFAParser<T: OptFields> {
+pub struct GFAParser<N: SegmentId, T: OptFields> {
     filter: GFALineFilter,
     _optional_fields: std::marker::PhantomData<T>,
+    _segment_names: std::marker::PhantomData<N>,
 }
 
-impl<T: OptFields> Default for GFAParser<T> {
-    fn default() -> Self {
-        Self::with_config(GFAParsingConfig::all())
-    }
-}
-
-impl<T: OptFields> GFAParser<T> {
+impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
     /// Create a new GFAParser that will parse all four GFA line
     /// types, and use the optional fields parser and storage `T`.
     pub fn new() -> Self {
-        Default::default()
-    }
-
-    /// Create a new GFAParser using the provided configuration.
-    /// `GFAParsingConfig::all()` and `GFAParsingConfig::none()` can
-    /// be used as a basis for more granular choices.
-    pub fn with_config(config: GFAParsingConfig) -> Self {
-        let filter = config.make_filter();
-        GFAParser {
-            filter,
-            _optional_fields: std::marker::PhantomData,
-        }
+        let config = GFAParserBuilder::all();
+        config.build()
     }
 
     /// Filters a line before parsing, only passing through the lines
@@ -120,37 +100,17 @@ impl<T: OptFields> GFAParser<T> {
         (self.filter)(line)
     }
 
-    /// Consume an iterator of lines of bytes, parsing each as a GFA
-    /// line. Returns a GFA object containing all the parsed lines.
-    /// Lines that could not be parsed are ignored.
-    pub fn parse_all<I>(&self, input: I) -> GFA<BString, T>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        let mut gfa = GFA::new();
-        for line in input {
-            if let Some(line) = self.parse_line(line.as_ref()) {
-                gfa.insert_line(line)
-            }
-        }
-        gfa
-    }
-
-    /// Parse a single line into a GFA line. The result can be
-    /// inserted into a GFA object using the GFA insert_line() method.
-    pub fn parse_line(&self, line: &[u8]) -> Option<Line<BString, T>> {
-        use Line::*;
-        let line: &BStr = line.trim().as_ref();
+    pub fn parse_line_bytes(&self, bytes: &[u8]) -> Option<Line<N, T>> {
+        let line: &BStr = bytes.trim().as_ref();
         if let Some(line) = self.filter_line(line) {
             let mut fields = line.split_str(b"\t");
             let hdr = fields.next()?;
             match hdr {
-                b"H" => ParseGFA::parse_line(fields).map(Header),
-                b"S" => ParseGFA::parse_line(fields).map(Segment),
-                b"L" => ParseGFA::parse_line(fields).map(Link),
-                b"C" => ParseGFA::parse_line(fields).map(Containment),
-                b"P" => ParseGFA::parse_line(fields).map(Path),
+                b"H" => Header::parse_line(fields).map(Header::wrap),
+                b"S" => Segment::parse_line(fields).map(Segment::wrap),
+                b"L" => Link::parse_line(fields).map(Link::wrap),
+                b"C" => Containment::parse_line(fields).map(Containment::wrap),
+                b"P" => Path::parse_line(fields).map(Path::wrap),
                 _ => None,
             }
         } else {
@@ -163,13 +123,13 @@ impl<T: OptFields> GFAParser<T> {
     pub fn parse_file<P: AsRef<std::path::Path>>(
         &self,
         path: P,
-    ) -> std::io::Result<GFA<BString, T>> {
+    ) -> Result<GFA<N, T>, ParseError> {
         use {
             bstr::io::BufReadExt,
             std::{fs::File, io::BufReader},
         };
 
-        let file = File::open(path.as_ref())?;
+        let file = File::open(path)?;
         let lines = BufReader::new(file).byte_lines();
 
         let mut gfa = GFA::new();
@@ -185,84 +145,11 @@ impl<T: OptFields> GFAParser<T> {
     }
 }
 
-/// Represents the user-facing parser configuration that does not
-/// depend on the type of the resulting GFA object; currently limited
-/// to filtering which lines to parse and which to ignore.
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct GFAParsingConfig {
-    pub segments: bool,
-    pub links: bool,
-    pub containments: bool,
-    pub paths: bool,
-}
-
-impl std::default::Default for GFAParsingConfig {
-    fn default() -> Self {
-        Self::all()
-    }
-}
-
-impl GFAParsingConfig {
-    /// Parse no GFA lines, useful if you only want to parse one line type.
-    pub fn none() -> Self {
-        GFAParsingConfig {
-            segments: false,
-            links: false,
-            containments: false,
-            paths: false,
-        }
+impl<T: OptFields> Header<T> {
+    fn wrap<N: SegmentId>(self) -> Line<N, T> {
+        Line::Header(self)
     }
 
-    /// Parse all GFA lines.
-    pub fn all() -> Self {
-        GFAParsingConfig {
-            segments: true,
-            links: true,
-            containments: true,
-            paths: true,
-        }
-    }
-
-    fn make_filter(&self) -> GFALineFilter {
-        let mut filter_string = BString::from("H");
-        if self.segments {
-            filter_string.push(b'S');
-        }
-        if self.links {
-            filter_string.push(b'L');
-        }
-        if self.containments {
-            filter_string.push(b'C');
-        }
-        if self.paths {
-            filter_string.push(b'P');
-        }
-        Box::new(move |s| {
-            if filter_string.contains_str(&s[0..1]) {
-                Some(s)
-            } else {
-                None
-            }
-        })
-    }
-}
-
-/// Trait for parsing a single line into one of the GFA line types,
-/// should only be implemented for the five types in the spec. NB: For
-/// now this trait is oblivious to the type of optional fields, but
-/// that may change in the future, for example if we want an OptFields
-/// type that requires some tags be present.
-trait ParseGFA: Sized + Default {
-    /// The parsers all work on iterators over fields of byte slices,
-    /// assumed to be created by splitting the lines of a GFA file on
-    /// tabs.
-    fn parse_line<I>(input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>;
-}
-
-impl<T: OptFields> ParseGFA for Header<T> {
     fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
@@ -283,19 +170,6 @@ impl<T: OptFields> ParseGFA for Header<T> {
     }
 }
 
-fn parse_name<I>(input: &mut I) -> Option<BString>
-where
-    I: Iterator,
-    I::Item: AsRef<[u8]>,
-{
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"(?-u)[!-)+-<>-~][!-~]*").unwrap();
-    }
-
-    let next = input.next()?;
-    RE.find(next.as_ref()).map(|s| BString::from(s.as_bytes()))
-}
-
 fn parse_sequence<I>(input: &mut I) -> Option<BString>
 where
     I: Iterator,
@@ -310,7 +184,11 @@ where
 }
 
 impl<N: SegmentId, T: OptFields> Segment<N, T> {
-    fn parse_line_<I>(mut input: I) -> Option<Self>
+    fn wrap(self) -> Line<N, T> {
+        Line::Segment(self)
+    }
+
+    fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
@@ -326,59 +204,21 @@ impl<N: SegmentId, T: OptFields> Segment<N, T> {
     }
 }
 
-impl<T: OptFields> ParseGFA for Segment<BString, T> {
-    fn parse_line<I>(mut input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        let name = parse_name(&mut input)?;
-        let sequence = parse_sequence(&mut input)?;
-        let optional = T::parse(input);
-        Some(Segment {
-            name,
-            sequence,
-            optional,
-        })
-    }
-}
-
 impl<N: SegmentId, T: OptFields> Link<N, T> {
-    fn parse_line_<I>(mut input: I) -> Option<Self>
+    fn wrap(self) -> Line<N, T> {
+        Line::Link(self)
+    }
+
+    fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
         use Orientation as O;
         let from_segment = N::parse_next(&mut input)?;
-        let from_orient = input.next().and_then(O::from_bytes)?;
+        let from_orient = input.next().and_then(O::from_bytes_plus_minus)?;
         let to_segment = N::parse_next(&mut input)?;
-        let to_orient = input.next().and_then(O::from_bytes)?;
-        let overlap = input.next()?.as_ref().into();
-
-        let optional = T::parse(input);
-        Some(Link {
-            from_segment,
-            from_orient,
-            to_segment,
-            to_orient,
-            overlap,
-            optional,
-        })
-    }
-}
-
-impl<T: OptFields> ParseGFA for Link<BString, T> {
-    fn parse_line<I>(mut input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        use Orientation as O;
-        let from_segment = parse_name(&mut input)?;
-        let from_orient = input.next().and_then(O::from_bytes)?;
-        let to_segment = parse_name(&mut input)?;
-        let to_orient = input.next().and_then(O::from_bytes)?;
+        let to_orient = input.next().and_then(O::from_bytes_plus_minus)?;
         let overlap = input.next()?.as_ref().into();
 
         let optional = T::parse(input);
@@ -394,7 +234,11 @@ impl<T: OptFields> ParseGFA for Link<BString, T> {
 }
 
 impl<N: SegmentId, T: OptFields> Containment<N, T> {
-    fn parse_line_<I>(mut input: I) -> Option<Self>
+    fn wrap(self) -> Line<N, T> {
+        Line::Containment(self)
+    }
+
+    fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
@@ -403,9 +247,11 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
         use Orientation as O;
 
         let container_name = N::parse_next(&mut input)?;
-        let container_orient = input.next().and_then(O::from_bytes)?;
+        let container_orient =
+            input.next().and_then(O::from_bytes_plus_minus)?;
         let contained_name = N::parse_next(&mut input)?;
-        let contained_orient = input.next().and_then(O::from_bytes)?;
+        let contained_orient =
+            input.next().and_then(O::from_bytes_plus_minus)?;
 
         let pos = input.next()?;
         let pos = from_utf8(pos.as_ref()).ok().and_then(|p| p.parse().ok())?;
@@ -425,45 +271,19 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
     }
 }
 
-impl<T: OptFields> ParseGFA for Containment<BString, T> {
+impl<N: SegmentId, T: OptFields> Path<N, T> {
+    fn wrap(self) -> Line<N, T> {
+        Line::Path(self)
+    }
+
     fn parse_line<I>(mut input: I) -> Option<Self>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        use std::str::from_utf8;
-        use Orientation as O;
-
-        let container_name = parse_name(&mut input)?;
-        let container_orient = input.next().and_then(O::from_bytes)?;
-        let contained_name = parse_name(&mut input)?;
-        let contained_orient = input.next().and_then(O::from_bytes)?;
-
-        let pos = input.next()?;
-        let pos = from_utf8(pos.as_ref()).ok().and_then(|p| p.parse().ok())?;
-
-        let overlap = input.next()?.as_ref().into();
-
-        let optional = T::parse(input);
-        Some(Containment {
-            container_name,
-            container_orient,
-            contained_name,
-            contained_orient,
-            overlap,
-            pos,
-            optional,
-        })
-    }
-}
-
-impl<T: OptFields> Path<T> {
-    fn parse_line_<I>(mut input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        let path_name = parse_name(&mut input)?;
+        // Use the SegmentId parser for the path name as well; it's
+        // just always BString
+        let path_name = BString::parse_next(&mut input)?;
 
         let segment_names =
             input.next().map(|bs| BString::from(bs.as_ref()))?;
@@ -477,41 +297,7 @@ impl<T: OptFields> Path<T> {
 
         let optional = T::parse(input);
 
-        Some(Path {
-            path_name,
-            segment_names,
-            overlaps,
-            optional,
-        })
-    }
-}
-
-impl<T: OptFields> ParseGFA for Path<T> {
-    fn parse_line<I>(mut input: I) -> Option<Self>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        let path_name = parse_name(&mut input)?;
-
-        let segment_names =
-            input.next().map(|bs| BString::from(bs.as_ref()))?;
-
-        let overlaps = input
-            .next()?
-            .as_ref()
-            .split_str(b",")
-            .map(BString::from)
-            .collect();
-
-        let optional = T::parse(input);
-
-        Some(Path {
-            path_name,
-            segment_names,
-            overlaps,
-            optional,
-        })
+        Some(Path::new(path_name, segment_names, overlaps, optional))
     }
 }
 
@@ -521,13 +307,13 @@ mod tests {
 
     #[test]
     fn can_parse_header() {
-        let hdr = "VN:Z:1.0";
+        let hdr = b"VN:Z:1.0";
         let hdr_ = Header {
             version: Some("1.0".into()),
             optional: (),
         };
 
-        let result: Option<Header<()>> = ParseGFA::parse_line([hdr].iter());
+        let result: Option<Header<()>> = Header::parse_line([hdr].iter());
 
         match result {
             None => {
@@ -540,7 +326,7 @@ mod tests {
     #[test]
     fn can_parse_link() {
         let link = "11	+	12	-	4M";
-        let link_ = Link {
+        let link_: Link<BString, ()> = Link {
             from_segment: "11".into(),
             from_orient: Orientation::Forward,
             to_segment: "12".into(),
@@ -548,9 +334,11 @@ mod tests {
             overlap: "4M".into(),
             optional: (),
         };
+
         let fields = link.split_terminator('\t');
-        let parsed: Option<Link<BString, ()>> = ParseGFA::parse_line(fields);
-        match parsed {
+        let result = Link::parse_line(fields);
+
+        match result {
             None => {
                 panic!("Error parsing link");
             }
@@ -573,9 +361,8 @@ mod tests {
         };
 
         let fields = cont.split_terminator('\t');
-        let parsed: Option<Containment<BString, ()>> =
-            ParseGFA::parse_line(fields);
-        match parsed {
+        let result = Containment::parse_line(fields);
+        match result {
             None => {
                 panic!("Error parsing containment");
             }
@@ -587,16 +374,16 @@ mod tests {
     fn can_parse_path() {
         let path = "14\t11+,12-,13+\t4M,5M";
 
-        let path_ = Path {
-            path_name: "14".into(),
-            segment_names: "11+,12-,13+".into(),
-            overlaps: vec!["4M".into(), "5M".into()],
-            optional: (),
-        };
+        let path_: Path<BString, _> = Path::new(
+            "14".into(),
+            "11+,12-,13+".into(),
+            vec!["4M".into(), "5M".into()],
+            (),
+        );
 
         let fields = path.split_terminator('\t');
 
-        let result: Option<Path<()>> = ParseGFA::parse_line(fields);
+        let result = Path::parse_line(fields);
 
         match result {
             None => {
@@ -609,7 +396,7 @@ mod tests {
     #[test]
     fn can_parse_gfa_lines() {
         let parser = GFAParser::new();
-        let gfa: GFA<BString, ()> = parser.parse_file("./lil.gfa").unwrap();
+        let gfa: GFA<BString, ()> = parser.parse_file(&"./lil.gfa").unwrap();
 
         let num_segs = gfa.segments.len();
         let num_links = gfa.links.len();
@@ -627,8 +414,8 @@ mod tests {
         use OptFieldVal::*;
         let name = "11";
         let seq = "ACCTT";
-        let seg = "11\tACCTT\tLN:i:123\tSH:H:AACCFF05\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
-        let fields = seg.split_terminator('\t');
+        let segment_bytes = "11\tACCTT\tLN:i:123\tSH:H:AACCFF05\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
+        let fields = segment_bytes.split_terminator('\t');
 
         let optional_fields: Vec<_> = vec![
             OptField::new(b"LN", Int(123)),
@@ -645,7 +432,7 @@ mod tests {
         .collect();
 
         let segment_1: Option<Segment<BString, ()>> =
-            ParseGFA::parse_line(fields.clone());
+            Segment::parse_line(fields.clone());
 
         assert_eq!(
             Some(Segment {
@@ -657,7 +444,7 @@ mod tests {
         );
 
         let segment_2: Segment<BString, OptionalFields> =
-            ParseGFA::parse_line(fields.clone()).unwrap();
+            Segment::parse_line(fields).unwrap();
 
         assert_eq!(segment_2.name, name);
         assert_eq!(segment_2.sequence, seq);
