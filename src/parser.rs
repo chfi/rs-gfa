@@ -7,6 +7,117 @@ use crate::optfields::*;
 
 type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
 
+/// Trait for the types that can be parsed and used as segment IDs;
+/// will probably only be usize and BString
+pub trait SegmentId: Sized {
+    fn parse_id<I>(input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>;
+}
+
+impl SegmentId for usize {
+    fn parse_id<I>(mut input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(?-u)[0-9]+").unwrap();
+        }
+        let next = input.next()?;
+        RE.find(next.as_ref()).map(|bs| {
+            let s = std::str::from_utf8(bs.as_bytes()).unwrap();
+            s.parse::<usize>().unwrap()
+        })
+    }
+}
+
+impl SegmentId for BString {
+    fn parse_id<I>(mut input: I) -> Option<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(?-u)\*|[A-Za-z=.]+").unwrap();
+        }
+
+        let next = input.next()?;
+        RE.find(next.as_ref()).map(|s| BString::from(s.as_bytes()))
+    }
+}
+
+/// Builder struct for GFAParsers
+pub struct GFAParserBuilder {
+    pub segments: bool,
+    pub links: bool,
+    pub containments: bool,
+    pub paths: bool,
+}
+
+impl GFAParserBuilder {
+    /// Parse no GFA lines, useful if you only want to parse one line type.
+    pub fn none() -> Self {
+        GFAParserBuilder {
+            segments: false,
+            links: false,
+            containments: false,
+            paths: false,
+        }
+    }
+
+    /// Parse all GFA lines.
+    pub fn all() -> Self {
+        GFAParserBuilder {
+            segments: true,
+            links: true,
+            containments: true,
+            paths: true,
+        }
+    }
+
+    pub fn build<N: SegmentId, T: OptFields>(self) -> NewGFAParser<N, T> {
+        let filter = self.make_filter();
+        NewGFAParser {
+            filter,
+            _optional_fields: std::marker::PhantomData,
+            _segment_names: std::marker::PhantomData,
+        }
+    }
+
+    pub fn build_usize_id<T: OptFields>(self) -> NewGFAParser<usize, T> {
+        self.build()
+    }
+
+    pub fn build_bstr_id<T: OptFields>(self) -> NewGFAParser<BString, T> {
+        self.build()
+    }
+
+    fn make_filter(&self) -> GFALineFilter {
+        let mut filter_string = BString::from("H");
+        if self.segments {
+            filter_string.push(b'S');
+        }
+        if self.links {
+            filter_string.push(b'L');
+        }
+        if self.containments {
+            filter_string.push(b'C');
+        }
+        if self.paths {
+            filter_string.push(b'P');
+        }
+        Box::new(move |s| {
+            if filter_string.contains_str(&s[0..1]) {
+                Some(s)
+            } else {
+                None
+            }
+        })
+    }
+}
+
 /// GFAParser encapsulates a parsing configuration, which is currently
 /// limited to filtering based on line type, and the choice of
 /// optional fields storage (see optfields.rs). Will likely become
