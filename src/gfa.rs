@@ -135,12 +135,49 @@ pub struct Header<T: OptFields> {
 /// A segment in a GFA graph. Generic over the name type, but
 /// currently the parser is only defined for N = BString
 #[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
 )]
 pub struct Segment<N, T: OptFields> {
     pub name: N,
     pub sequence: BString,
     pub optional: T,
+}
+
+impl<N, T: OptFields> Segment<N, T> {
+    pub(crate) fn nameless_clone<M: Default>(&self) -> Segment<M, T> {
+        Segment {
+            name: Default::default(),
+            sequence: self.sequence.clone(),
+            optional: self.optional.clone(),
+        }
+    }
+}
+
+impl<N, T: OptFields> Link<N, T> {
+    pub(crate) fn nameless_clone<M: Default>(&self) -> Link<M, T> {
+        Link {
+            from_segment: Default::default(),
+            from_orient: self.from_orient,
+            to_segment: Default::default(),
+            to_orient: self.to_orient,
+            overlap: self.overlap.clone(),
+            optional: self.optional.clone(),
+        }
+    }
+}
+
+impl<N, T: OptFields> Containment<N, T> {
+    pub(crate) fn nameless_clone<M: Default>(&self) -> Containment<M, T> {
+        Containment {
+            container_name: Default::default(),
+            container_orient: self.container_orient,
+            contained_name: Default::default(),
+            contained_orient: self.contained_orient,
+            pos: self.pos,
+            overlap: self.overlap.clone(),
+            optional: self.optional.clone(),
+        }
+    }
 }
 
 fn parse_usize(bs: &BString) -> Option<usize> {

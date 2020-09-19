@@ -217,6 +217,7 @@ dependencies = [
  "nom",
  "regex",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
