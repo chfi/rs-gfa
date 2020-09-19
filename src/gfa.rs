@@ -39,11 +39,12 @@ impl SegmentId for usize {
 
     fn parse_id(input: &[u8]) -> Option<Self> {
         lazy_static! {
-            static ref RE: Regex = Regex::new(r"(?-u)[0-9]+").unwrap();
+            static ref RE: Regex =
+                Regex::new(r"(?-u)[!-)+-<>-~][!-~]*").unwrap();
         }
-        RE.find(input).map(|bs| {
+        RE.find(input).and_then(|bs| {
             let s = std::str::from_utf8(bs.as_bytes()).unwrap();
-            s.parse::<usize>().unwrap()
+            s.parse::<usize>().ok()
         })
     }
 }

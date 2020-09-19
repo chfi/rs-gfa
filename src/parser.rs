@@ -344,8 +344,6 @@ impl<N: SegmentId, T: OptFields> Segment<N, T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        // let name = N::parse_next(&mut input).ok_or(?;
-
         let name = N::parse_next_result(&mut input)?;
         let sequence = parse_sequence(&mut input)?;
         let optional = T::parse(input);
@@ -573,6 +571,21 @@ mod tests {
         assert_eq!(num_links, 20);
         assert_eq!(num_conts, 0);
         assert_eq!(num_paths, 3);
+    }
+
+    #[test]
+    fn gfa_usize_parser_can_fail() {
+        let usize_parser: GFAParser<usize, OptionalFields> = GFAParser::new();
+        let usize_gfa = usize_parser.parse_file(&"./test/gfas/diatom.gfa");
+
+        assert!(usize_gfa.is_err());
+
+        let err = usize_gfa.unwrap_err();
+
+        assert!(matches!(
+            err,
+            ParseError::InvalidLine(ParseFieldError::UsizeIdError, _)
+        ));
     }
 
     #[test]
