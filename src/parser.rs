@@ -561,7 +561,8 @@ mod tests {
     #[test]
     fn can_parse_gfa_lines() {
         let parser = GFAParser::new();
-        let gfa: GFA<BString, ()> = parser.parse_file(&"./lil.gfa").unwrap();
+        let gfa: GFA<BString, ()> =
+            parser.parse_file(&"./test/gfas/lil.gfa").unwrap();
 
         let num_segs = gfa.segments.len();
         let num_links = gfa.links.len();

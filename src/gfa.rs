@@ -94,40 +94,6 @@ impl<N, T: OptFields> GFA<N, T> {
     }
 }
 
-impl<T: OptFields> GFA<BString, T> {
-    /// Creates a new GFA object whose segment names are all 64-bit
-    /// unsigned integers. If there's any occurrence in the input GFA
-    /// of a segment name that cannot be parsed into a usize, None is
-    /// returned.
-    pub fn usize_names(&self) -> Option<GFA<usize, T>> {
-        let mut gfa = GFA::new();
-
-        gfa.header = self.header.clone();
-
-        for seg in self.segments.iter() {
-            let new_seg = seg.usize_name()?;
-            gfa.segments.push(new_seg);
-        }
-
-        for link in self.links.iter() {
-            let new_link = link.usize_name()?;
-            gfa.links.push(new_link);
-        }
-
-        for cont in self.containments.iter() {
-            let new_cont = cont.usize_name()?;
-            gfa.containments.push(new_cont);
-        }
-
-        for path in self.paths.iter() {
-            let new_path = path.usize_path()?;
-            gfa.paths.push(new_path);
-        }
-
-        Some(gfa)
-    }
-}
-
 /// Consume a GFA object to produce an iterator over all the lines
 /// contained within. The iterator first produces all segments, then
 /// links, then containments, and finally paths.
@@ -190,19 +156,10 @@ impl<T: OptFields> Segment<BString, T> {
             optional: Default::default(),
         }
     }
-
-    pub fn usize_name(&self) -> Option<Segment<usize, T>> {
-        let ix = parse_usize(&self.name)?;
-        Some(Segment {
-            name: ix,
-            sequence: self.sequence.clone(),
-            optional: self.optional.clone(),
-        })
-    }
 }
 
 #[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
 )]
 pub struct Link<N, T: OptFields> {
     pub from_segment: N,
@@ -246,7 +203,7 @@ impl<T: OptFields> Link<BString, T> {
 }
 
 #[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
 )]
 pub struct Containment<N, T: OptFields> {
     pub container_name: N,
@@ -278,7 +235,7 @@ impl<T: OptFields> Containment<BString, T> {
 /// BString to keep memory down; use path.iter() to get an iterator
 /// over the parsed path segments and orientations.
 #[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize,
+    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
 )]
 pub struct Path<N, T: OptFields> {
     pub path_name: BString,
@@ -376,7 +333,9 @@ impl<T: OptFields> Path<usize, T> {
 }
 
 /// Represents segment orientation/strand
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
+)]
 pub enum Orientation {
     Forward,
     Backward,
@@ -406,6 +365,13 @@ impl Orientation {
             Self::Backward => '-',
         };
         write!(f, "{}", sym)
+    }
+
+    pub fn plus_minus_as_byte(&self) -> u8 {
+        match self {
+            Self::Forward => b'+',
+            Self::Backward => b'-',
+        }
     }
 
     /// Parse an orientation from a single-element bytestring, where >

@@ -158,10 +158,11 @@ mod tests {
         use std::path::PathBuf;
 
         let parser = crate::parser::GFAParser::new();
-        let in_gfa: GFA<BString, ()> = parser.parse_file(&"./lil.gfa").unwrap();
+        let in_gfa: GFA<BString, ()> =
+            parser.parse_file(&"./test/gfas/lil.gfa").unwrap();
 
         let mut file =
-            std::fs::File::open(&PathBuf::from("./lil.gfa")).unwrap();
+            std::fs::File::open(&PathBuf::from("./test/gfas/lil.gfa")).unwrap();
         let mut file_string = String::new();
         file.read_to_string(&mut file_string).unwrap();
 
