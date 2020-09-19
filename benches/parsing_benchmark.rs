@@ -72,13 +72,13 @@ macro_rules! bench_gfa_withopt {
     };
 }
 
-bench_gfa_noopt!(cov_noopt, "relabeledSeqs.gfa");
+// bench_gfa_noopt!(cov_noopt, "relabeledSeqs.gfa");
 bench_gfa_noopt!(a3105_noopt, "A-3105.gfa");
 bench_gfa_noopt!(a3105_sort_noopt, "A-3105.sort.gfa");
 bench_gfa_noopt!(drb1_noopt, "DRB1-3123.gfa");
 bench_gfa_noopt!(drb1_sort_noopt, "DRB1-3123.sort.gfa");
 
-bench_gfa_withopt!(cov_withopt, "relabeledSeqs.gfa");
+// bench_gfa_withopt!(cov_withopt, "relabeledSeqs.gfa");
 bench_gfa_withopt!(a3105_withopt, "A-3105.gfa");
 bench_gfa_withopt!(a3105_sort_withopt, "A-3105.sort.gfa");
 bench_gfa_withopt!(drb1_withopt, "DRB1-3123.gfa");
