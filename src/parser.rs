@@ -1,3 +1,5 @@
+pub mod error;
+
 use bstr::{BStr, BString, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
@@ -5,79 +7,12 @@ use regex::bytes::Regex;
 use crate::gfa::*;
 use crate::optfields::*;
 
+pub use crate::parser::error::{ParseError, ParseFieldError};
+
 type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
-
-#[derive(Debug, Clone)]
-pub enum ParseFieldError {
-    /// A segment ID couldn't be parsed as a usize. Can only happen
-    /// when parsing into a GFA<usize, T>.
-    UsizeIdError,
-    /// A bytestring couldn't be parsed as a bytestring, can happen
-    /// when the contents aren't UTF8.
-    BStringUtf8Error,
-    /// Attempted to parse an orientation that wasn't + or -.
-    OrientationError,
-    /// A required field was incorrectly formatted. Includes the field
-    /// name as defined by the GFA1 spec.
-    InvalidField(&'static str),
-    MissingFields,
-    Other,
-}
-
-/// Type encapsulating different kinds of GFA parsing errors
-#[derive(Debug)]
-pub enum ParseError {
-    /// The line type was something other than 'H', 'S', 'L', 'C', or
-    /// 'P'. This is ignored by the file parser rather than a fail
-    /// condition.
-    UnknownLineType,
-    /// Tried to parse an empty line. Can be ignored.
-    EmptyLine,
-    /// A line couldn't be parsed. Includes the problem line and a
-    /// variant describing the error.
-    InvalidLine(ParseFieldError, String),
-    InvalidField(ParseFieldError),
-    /// Wrapper for an IO error.
-    IOError(std::io::Error),
-
-    Other,
-}
 
 type GFAFieldResult<T> = Result<T, ParseFieldError>;
 type GFAResult<T> = Result<T, ParseError>;
-
-impl From<std::io::Error> for ParseError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IOError(err)
-    }
-}
-
-impl ParseError {
-    pub fn other() -> Self {
-        Self::Other
-    }
-
-    pub(crate) fn invalid_line(error: ParseFieldError, line: &[u8]) -> Self {
-        let s = std::str::from_utf8(line).unwrap();
-        Self::InvalidLine(error, s.into())
-    }
-
-    pub fn break_if_necessary(self) -> GFAResult<()> {
-        if self.can_safely_continue() {
-            Ok(())
-        } else {
-            Err(self)
-        }
-    }
-
-    pub const fn can_safely_continue(&self) -> bool {
-        match self {
-            ParseError::EmptyLine => true,
-            ParseError::UnknownLineType => true,
-            _ => false,
-        }
-    }
-}
 
 /// Builder struct for GFAParsers
 pub struct GFAParserBuilder {
