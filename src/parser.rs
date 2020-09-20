@@ -133,7 +133,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         }
     }
 
-    pub fn parse_line_with_error(
+    pub fn parse_gfa_line(
         &self,
         bytes: &[u8],
     ) -> Result<Line<N, T>, ParseError> {
@@ -145,24 +145,16 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         let invalid_line =
             |e: ParseFieldError| ParseError::invalid_line(e, bytes);
 
-        match hdr {
-            b"H" => Header::parse_line(fields)
-                .map(Header::wrap)
-                .map_err(invalid_line),
-            b"S" => Segment::parse_line(fields)
-                .map(Segment::wrap)
-                .map_err(invalid_line),
-            b"L" => Link::parse_line(fields)
-                .map(Link::wrap)
-                .map_err(invalid_line),
-            b"C" => Containment::parse_line(fields)
-                .map(Containment::wrap)
-                .map_err(invalid_line),
-            b"P" => Path::parse_line(fields)
-                .map(Path::wrap)
-                .map_err(invalid_line),
-            _ => Err(ParseError::UnknownLineType),
+        let line = match hdr {
+            b"H" => Header::parse_line(fields).map(Header::wrap),
+            b"S" => Segment::parse_line(fields).map(Segment::wrap),
+            b"L" => Link::parse_line(fields).map(Link::wrap),
+            b"C" => Containment::parse_line(fields).map(Containment::wrap),
+            b"P" => Path::parse_line(fields).map(Path::wrap),
+            _ => return Err(ParseError::UnknownLineType),
         }
+        .map_err(invalid_line)?;
+        Ok(line)
     }
 
     pub fn parse_lines<I>(&self, lines: I) -> GFAResult<GFA<N, T>>
@@ -173,7 +165,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         let mut gfa = GFA::new();
 
         for line in lines {
-            match self.parse_line_with_error(line.as_ref()) {
+            match self.parse_gfa_line(line.as_ref()) {
                 Ok(parsed) => gfa.insert_line(parsed),
                 Err(err) if err.can_safely_continue() => (),
                 Err(err) => return Err(err),
@@ -199,7 +191,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
 
         for line in lines {
             let line = line?;
-            match self.parse_line_with_error(line.as_ref()) {
+            match self.parse_gfa_line(line.as_ref()) {
                 Ok(parsed) => gfa.insert_line(parsed),
                 Err(err) if err.can_safely_continue() => (),
                 Err(err) => return Err(err),
@@ -238,16 +230,16 @@ impl<T: OptFields> Header<T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let next = input.next().ok_or(ParseFieldError::MissingFields)?;
-        let version = OptField::parse(next.as_ref())
-            .ok_or(ParseFieldError::MissingFields)?;
-        let optional = T::parse(input);
+        let next = next_field(&mut input)?;
+        let version = OptField::parse(next.as_ref());
+        let version =
+            if let Some(OptFieldVal::Z(version)) = version.map(|v| v.value) {
+                Some(version)
+            } else {
+                None
+            };
 
-        let version = if let OptFieldVal::Z(version) = version.value {
-            Some(version)
-        } else {
-            None
-        };
+        let optional = T::parse(input);
 
         Ok(Header { version, optional })
     }
@@ -262,7 +254,7 @@ where
         static ref RE: Regex = Regex::new(r"(?-u)\*|[A-Za-z=.]+").unwrap();
     }
 
-    let next = input.next().ok_or(ParseFieldError::MissingFields)?;
+    let next = next_field(input)?;
     RE.find(next.as_ref())
         .map(|s| BString::from(s.as_bytes()))
         .ok_or(ParseFieldError::InvalidField("Sequence"))
@@ -278,7 +270,7 @@ impl<N: SegmentId, T: OptFields> Segment<N, T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let name = N::parse_next_result(&mut input)?;
+        let name = N::parse_next(&mut input)?;
         let sequence = parse_sequence(&mut input)?;
         let optional = T::parse(input);
         Ok(Segment {
@@ -299,9 +291,9 @@ impl<N: SegmentId, T: OptFields> Link<N, T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let from_segment = N::parse_next_result(&mut input)?;
+        let from_segment = N::parse_next(&mut input)?;
         let from_orient = parse_orientation(&mut input)?;
-        let to_segment = N::parse_next_result(&mut input)?;
+        let to_segment = N::parse_next(&mut input)?;
         let to_orient = parse_orientation(&mut input)?;
 
         let overlap = next_field(&mut input)?.as_ref().into();
@@ -328,19 +320,19 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let container_name = N::parse_next_result(&mut input)?;
+        let container_name = N::parse_next(&mut input)?;
         let container_orient = parse_orientation(&mut input)?;
-        let contained_name = N::parse_next_result(&mut input)?;
+
+        let contained_name = N::parse_next(&mut input)?;
         let contained_orient = parse_orientation(&mut input)?;
 
-        let next = next_field(&mut input)?;
-
-        let pos = std::str::from_utf8(next.as_ref())?;
-        let pos = pos.parse::<usize>()?;
+        let pos = next_field(&mut input)?;
+        let pos = std::str::from_utf8(pos.as_ref())?.parse()?;
 
         let overlap = next_field(&mut input)?.as_ref().into();
 
         let optional = T::parse(input);
+
         Ok(Containment {
             container_name,
             container_orient,
@@ -365,11 +357,10 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
     {
         // Use the SegmentId parser for the path name as well; it's
         // just always BString
-        let path_name = BString::parse_next_result(&mut input)?;
+        let path_name = BString::parse_next(&mut input)?;
 
-        let segment_names = next_field(&mut input)
-            // .as_ref()
-            .map(|bs| BString::from(bs.as_ref()))?;
+        let segment_names =
+            next_field(&mut input).map(|bs| BString::from(bs.as_ref()))?;
 
         let overlaps = next_field(&mut input)?
             .as_ref()

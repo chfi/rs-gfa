@@ -69,6 +69,8 @@ impl fmt::Display for ParseFieldError {
     }
 }
 
+impl error::Error for ParseFieldError {}
+
 /// Type encapsulating different kinds of GFA parsing errors
 #[derive(Debug)]
 pub enum ParseError {
@@ -81,10 +83,10 @@ pub enum ParseError {
     /// A line couldn't be parsed. Includes the problem line and a
     /// variant describing the error.
     InvalidLine(ParseFieldError, String),
+    /// A field couldn't be parsed
     InvalidField(ParseFieldError),
     /// Wrapper for an IO error.
     IOError(std::io::Error),
-
     Unknown,
 }
 
@@ -113,6 +115,14 @@ impl From<std::io::Error> for ParseError {
         Self::IOError(err)
     }
 }
+
+impl From<ParseFieldError> for ParseError {
+    fn from(err: ParseFieldError) -> Self {
+        Self::InvalidField(err)
+    }
+}
+
+impl error::Error for ParseError {}
 
 impl ParseError {
     pub(crate) fn invalid_line(error: ParseFieldError, line: &[u8]) -> Self {

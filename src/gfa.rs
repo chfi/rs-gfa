@@ -7,27 +7,19 @@ use crate::optfields::*;
 use crate::parser::ParseFieldError;
 
 /// Trait for the types that can be parsed and used as segment IDs;
-/// will probably only be usize and BString
+/// will probably only be usize and BString.
 pub trait SegmentId: Sized + Default {
     const ERROR: ParseFieldError;
 
     fn parse_id(input: &[u8]) -> Option<Self>;
 
-    fn parse_next<I>(mut input: I) -> Option<Self>
+    fn parse_next<I>(mut input: I) -> Result<Self, ParseFieldError>
     where
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        let next = input.next()?;
-        Self::parse_id(next.as_ref())
-    }
-
-    fn parse_next_result<I>(input: I) -> Result<Self, ParseFieldError>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        Self::parse_next(input).ok_or(Self::ERROR)
+        let next = input.next().ok_or(ParseFieldError::MissingFields)?;
+        Self::parse_id(next.as_ref()).ok_or(Self::ERROR)
     }
 }
 
