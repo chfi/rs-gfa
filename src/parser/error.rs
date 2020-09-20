@@ -1,5 +1,8 @@
 use std::{error, fmt};
 
+pub type GFAFieldResult<T> = Result<T, ParseFieldError>;
+pub type GFAResult<T> = Result<T, ParseError>;
+
 #[derive(Debug, Clone)]
 pub enum ParseFieldError {
     /// A segment ID couldn't be parsed as a u64. Can only happen

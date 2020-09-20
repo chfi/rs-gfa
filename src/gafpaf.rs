@@ -1,12 +1,15 @@
 use bstr::{BString, ByteSlice};
 
-use std::convert::{TryFrom, TryInto};
-use std::fmt::Display;
+use bytemuck::{Contiguous, Pod, Zeroable};
+
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt::Display,
+};
 
 use nom::{bytes::complete::*, IResult};
 
-use crate::gfa::*;
-use crate::optfields::*;
+use crate::{gfa::*, optfields::*};
 
 /// A GAF record, with optional fields T. Can be created by using
 /// `parse_gaf`, and the Display implementation produces
@@ -69,16 +72,14 @@ pub enum GAFStep {
 
 impl Display for GAFStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Orientation::*;
-        let o_str = |o: &Orientation| match o {
-            Forward => ">",
-            Backward => "<",
-        };
-
         match self {
-            GAFStep::SegId(o, seg) => write!(f, "{}{}", o_str(o), seg),
+            GAFStep::SegId(o, seg) => {
+                o.write_gt_ln(f)?;
+                write!(f, "{}", seg)
+            }
             GAFStep::StableIntv(o, id, from, to) => {
-                write!(f, "{}{}:{}-{}", o_str(o), id, from, to)
+                o.write_gt_ln(f)?;
+                write!(f, "{}:{}-{}", id, from, to)
             }
         }
     }
@@ -312,7 +313,7 @@ where
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Contiguous, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CIGAROp {
     M = 0,
     I = 1,
@@ -329,26 +330,14 @@ impl TryFrom<u8> for CIGAROp {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        use CIGAROp::*;
-        match value {
-            b'M' => Ok(M),
-            b'I' => Ok(I),
-            b'D' => Ok(D),
-            b'N' => Ok(N),
-            b'S' => Ok(S),
-            b'H' => Ok(H),
-            b'P' => Ok(P),
-            b'=' => Ok(E),
-            b'X' => Ok(X),
-            _ => Err(()),
-        }
+        Self::from_integer(value).ok_or(())
     }
 }
 
 /// A memory-efficient representation of a single CIGAR op + length, as
 /// a u32.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Zeroable, Pod, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CIGARPair(u32);
 
 #[allow(clippy::len_without_is_empty)]
@@ -379,16 +368,26 @@ impl CIGARPair {
     pub fn from_pair((len, op): (u32, CIGAROp)) -> Self {
         CIGARPair((len << 4) | (op as u32))
     }
+
+    pub fn bytes_as_cigar_pair(bytes: &[u8]) -> Option<&Self> {
+        bytemuck::try_from_bytes(bytes).ok()
+    }
 }
 
 impl From<u32> for CIGARPair {
     fn from(bytes: u32) -> Self {
-        CIGARPair(bytes)
+        bytemuck::cast(bytes)
+    }
+}
+
+impl From<CIGARPair> for u32 {
+    fn from(cg: CIGARPair) -> Self {
+        bytemuck::cast(cg)
     }
 }
 
 impl CIGAROp {
-    fn to_u8(self) -> u8 {
+    fn to_u8_char(self) -> u8 {
         use CIGAROp::*;
         match self {
             M => b'M',
@@ -403,7 +402,7 @@ impl CIGAROp {
         }
     }
 
-    fn from_u8(byte: u8) -> Option<CIGAROp> {
+    fn from_u8_char(byte: u8) -> Option<CIGAROp> {
         use CIGAROp::*;
         match byte {
             b'M' => Some(M),
@@ -446,7 +445,7 @@ impl CIGAROp {
 
 impl std::fmt::Display for CIGAROp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let sym = char::from(self.to_u8());
+        let sym = char::from(self.to_u8_char());
         write!(f, "{}", sym)
     }
 }
@@ -458,7 +457,7 @@ impl std::str::FromStr for CIGAROp {
         s.as_bytes()
             .get(0)
             .cloned()
-            .and_then(CIGAROp::from_u8)
+            .and_then(CIGAROp::from_u8_char)
             .ok_or("Could not parse CIGAR operation")
     }
 }

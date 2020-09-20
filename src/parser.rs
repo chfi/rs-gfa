@@ -4,15 +4,13 @@ use bstr::{BStr, BString, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
-use crate::gfa::*;
-use crate::optfields::*;
+use crate::{gfa::*, optfields::*};
 
-pub use crate::parser::error::{ParseError, ParseFieldError};
+pub use crate::parser::error::{
+    GFAFieldResult, GFAResult, ParseError, ParseFieldError,
+};
 
 type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
-
-type GFAFieldResult<T> = Result<T, ParseFieldError>;
-type GFAResult<T> = Result<T, ParseError>;
 
 /// Builder struct for GFAParsers
 pub struct GFAParserBuilder {
