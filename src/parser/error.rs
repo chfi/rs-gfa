@@ -7,7 +7,7 @@ use std::{error, fmt};
 pub enum ParseFieldError {
     /// A segment ID couldn't be parsed as a u64. Can only happen
     /// when parsing into a GFA<u64, T>.
-    U64IdError,
+    UintIdError,
     /// A bytestring couldn't be parsed as a bytestring, can happen
     /// when the contents aren't UTF8.
     Utf8Error,

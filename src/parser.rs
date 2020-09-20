@@ -329,20 +329,15 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        use std::str::from_utf8;
-
         let container_name = N::parse_next_result(&mut input)?;
         let container_orient = parse_orientation(&mut input)?;
-        // input.next().and_then(O::from_bytes_plus_minus)?;
         let contained_name = N::parse_next_result(&mut input)?;
         let contained_orient = parse_orientation(&mut input)?;
-        // input.next().and_then(O::from_bytes_plus_minus)?;
 
         let next = next_field(&mut input)?;
-        // input.next()?;
-        let pos = from_utf8(next.as_ref()).ok().and_then(|p| p.parse().ok());
 
-        let parsed_pos = pos.ok_or(ParseFieldError::BStringUtf8Error)?;
+        let pos = std::str::from_utf8(next.as_ref())?;
+        let pos = pos.parse::<usize>()?;
 
         let overlap = next_field(&mut input)?.as_ref().into();
 
@@ -510,7 +505,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            ParseError::InvalidLine(ParseFieldError::UsizeIdError, _)
+            ParseError::InvalidLine(ParseFieldError::UintIdError, _)
         ));
     }
 

@@ -9,7 +9,7 @@ use crate::parser::ParseFieldError;
 /// Trait for the types that can be parsed and used as segment IDs;
 /// will probably only be usize and BString
 pub trait SegmentId: Sized + Default {
-    fn error() -> ParseFieldError;
+    const ERROR: ParseFieldError;
 
     fn parse_id(input: &[u8]) -> Option<Self>;
 
@@ -27,15 +27,12 @@ pub trait SegmentId: Sized + Default {
         I: Iterator,
         I::Item: AsRef<[u8]>,
     {
-        Self::parse_next(input).ok_or_else(Self::error)
+        Self::parse_next(input).ok_or(Self::ERROR)
     }
 }
 
 impl SegmentId for usize {
-    #[inline]
-    fn error() -> ParseFieldError {
-        ParseFieldError::UsizeIdError
-    }
+    const ERROR: ParseFieldError = ParseFieldError::UintIdError;
 
     fn parse_id(input: &[u8]) -> Option<Self> {
         lazy_static! {
@@ -50,10 +47,7 @@ impl SegmentId for usize {
 }
 
 impl SegmentId for BString {
-    #[inline]
-    fn error() -> ParseFieldError {
-        ParseFieldError::BStringUtf8Error
-    }
+    const ERROR: ParseFieldError = ParseFieldError::Utf8Error;
 
     fn parse_id(input: &[u8]) -> Option<Self> {
         lazy_static! {
