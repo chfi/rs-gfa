@@ -353,7 +353,7 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
             contained_name,
             contained_orient,
             overlap,
-            pos: parsed_pos,
+            pos,
             optional,
         })
     }
@@ -371,26 +371,17 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
     {
         // Use the SegmentId parser for the path name as well; it's
         // just always BString
-        // let path_name = BString::parse_next(&mut input)?;
         let path_name = BString::parse_next_result(&mut input)?;
 
-        // let next = next_field(&mut input)?;
         let segment_names = next_field(&mut input)
             // .as_ref()
             .map(|bs| BString::from(bs.as_ref()))?;
-        // input.next().map(|bs| BString::from(bs.as_ref()))?;
 
         let overlaps = next_field(&mut input)?
             .as_ref()
             .split_str(b",")
             .map(BString::from)
             .collect();
-        // let overlaps = input
-        //     .next()?
-        //     .as_ref()
-        //     .split_str(b",")
-        //     .map(BString::from)
-        //     .collect();
 
         let optional = T::parse(input);
 
