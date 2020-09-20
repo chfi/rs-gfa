@@ -243,14 +243,13 @@ impl<T: OptFields> Header<T> {
             .ok_or(ParseFieldError::MissingFields)?;
         let optional = T::parse(input);
 
-        if let OptFieldVal::Z(version) = version.value {
-            Ok(Header {
-                version: Some(version),
-                optional,
-            })
+        let version = if let OptFieldVal::Z(version) = version.value {
+            Some(version)
         } else {
-            Err(ParseFieldError::Other)
-        }
+            None
+        };
+
+        Ok(Header { version, optional })
     }
 }
 

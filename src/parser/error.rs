@@ -1,8 +1,5 @@
 use std::{error, fmt};
 
-// use crate::gfa::*;
-// use crate::optfields::*;
-
 #[derive(Debug, Clone)]
 pub enum ParseFieldError {
     /// A segment ID couldn't be parsed as a u64. Can only happen
@@ -19,65 +16,58 @@ pub enum ParseFieldError {
     /// name as defined by the GFA1 spec.
     InvalidField(&'static str),
     MissingFields,
-    Other,
-}
-
-macro_rules! impl_from_const {
-    ($from:ty, $to:ty, $out:expr) => {
-        impl From<$from> for $to {
-            fn from(_err: $from) -> Self {
-                $out
-            }
-        }
-    };
+    Unknown,
 }
 
 macro_rules! impl_many_from {
-    // ($to:ty) => ();
-    ($to:ty, $from:ty, $out:expr) => (
-        impl_from_const!($from, $to, $out);
+    ($to:ty, ($from:ty, $out:expr)) => ();
+    ($to:ty, ($from:ty, $out:expr), $(($f:ty, $o:expr)),* $(,)?) => (
+        impl From<$from> for $to {
+            fn from(_: $from) -> Self {
+                $out
+            }
+        }
+        impl_many_from!($to, $(($f, $o)),*);
     );
-    ($to:ty, $from:ty, $out:expr, $($f:ty, $o:expr),* $(,)?) => (
-        impl_from_const!($from, $to, $out);
-        impl_many_from!($to, $($f, $o),*);
-    );
-}
-
-macro_rules! impl_from_parse_field_error {
-    ($from:ty, $out:expr) => {
-        impl_from_const!($from, ParseFieldError, $out);
-    };
 }
 
 impl_many_from!(
     ParseFieldError,
-    std::str::Utf8Error,
-    ParseFieldError::Utf8Error,
-    std::num::ParseIntError,
-    ParseFieldError::ParseFromStringError,
-    std::num::ParseFloatError,
-    ParseFieldError::ParseFromStringError
+    (std::str::Utf8Error, ParseFieldError::Utf8Error),
+    (
+        std::num::ParseIntError,
+        ParseFieldError::ParseFromStringError
+    ),
+    (
+        std::num::ParseFloatError,
+        ParseFieldError::ParseFromStringError
+    )
 );
 
-/*
 impl fmt::Display for ParseFieldError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Self::*;
+        use ParseFieldError as PFE;
         match self {
-            U64IdError => {
+            PFE::UintIdError => {
                 write!(f, "Failed to parse a segment ID as an unsigned integer")
             }
-            BStringUtf8Error => {
-                // write!(f, "A string field contained
+            PFE::Utf8Error => {
+                write!(f, "Failed to parse a bytestring as a UTF-8 string")
             }
-            OrientationError => {}
-            InvalidField(field) => {}
-            MissingFields => {}
-            Other => {}
+            PFE::ParseFromStringError => {
+                write!(f, "Failed to parse a field from a string")
+            }
+            PFE::OrientationError => {
+                write!(f, "Failed to parse an orientation character")
+            }
+            PFE::InvalidField(field) => {
+                write!(f, "Failed to parse field `{}`", field)
+            }
+            PFE::MissingFields => write!(f, "Line is missing required fields"),
+            PFE::Unknown => write!(f, "Unknown error when parsing a field"),
         }
     }
 }
-*/
 
 /// Type encapsulating different kinds of GFA parsing errors
 #[derive(Debug)]
@@ -95,14 +85,28 @@ pub enum ParseError {
     /// Wrapper for an IO error.
     IOError(std::io::Error),
 
-    Other,
+    Unknown,
 }
 
-// impl fmt::Display for ParseError {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//     }
-
-// }
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ParseError as PE;
+        match self {
+            PE::UnknownLineType => {
+                write!(f, "Line type was not one of 'H', 'S', 'L', 'C', 'P'")
+            }
+            PE::EmptyLine => write!(f, "Line was empty"),
+            PE::InvalidLine(field_err, line) => {
+                write!(f, "Failed to parse line {}, error: {}", line, field_err)
+            }
+            PE::InvalidField(field_err) => {
+                write!(f, "Failed to parse field: {}", field_err)
+            }
+            PE::IOError(err) => write!(f, "IO error: {}", err),
+            PE::Unknown => write!(f, "Unknown error when parsing a line"),
+        }
+    }
+}
 
 impl From<std::io::Error> for ParseError {
     fn from(err: std::io::Error) -> Self {
@@ -111,10 +115,6 @@ impl From<std::io::Error> for ParseError {
 }
 
 impl ParseError {
-    pub fn other() -> Self {
-        Self::Other
-    }
-
     pub(crate) fn invalid_line(error: ParseFieldError, line: &[u8]) -> Self {
         let s = std::str::from_utf8(line).unwrap();
         Self::InvalidLine(error, s.into())
