@@ -10,7 +10,7 @@ pub use crate::parser::error::{
     GFAFieldResult, GFAResult, ParseError, ParseFieldError,
 };
 
-type GFALineFilter = Box<dyn Fn(&'_ BStr) -> Option<&'_ BStr>>;
+use crate::parser::error::ParserTolerance;
 
 /// Builder struct for GFAParsers
 pub struct GFAParserBuilder {
@@ -18,6 +18,7 @@ pub struct GFAParserBuilder {
     pub links: bool,
     pub containments: bool,
     pub paths: bool,
+    tolerance: ParserTolerance,
 }
 
 impl GFAParserBuilder {
@@ -28,6 +29,7 @@ impl GFAParserBuilder {
             links: false,
             containments: false,
             paths: false,
+            tolerance: Default::default(),
         }
     }
 
@@ -38,13 +40,32 @@ impl GFAParserBuilder {
             links: true,
             containments: true,
             paths: true,
+            tolerance: Default::default(),
         }
     }
 
+    pub fn ignore_errors(mut self) -> Self {
+        self.tolerance = ParserTolerance::IgnoreAll;
+        self
+    }
+
+    pub fn ignore_safe_errors(mut self) -> Self {
+        self.tolerance = ParserTolerance::Safe;
+        self
+    }
+
+    pub fn pedantic_errors(mut self) -> Self {
+        self.tolerance = ParserTolerance::Pedantic;
+        self
+    }
+
     pub fn build<N: SegmentId, T: OptFields>(self) -> GFAParser<N, T> {
-        let filter = self.make_filter();
         GFAParser {
-            filter,
+            segments: self.segments,
+            links: self.links,
+            containments: self.containments,
+            paths: self.paths,
+            tolerance: self.tolerance,
             _optional_fields: std::marker::PhantomData,
             _segment_names: std::marker::PhantomData,
         }
@@ -57,33 +78,14 @@ impl GFAParserBuilder {
     pub fn build_bstr_id<T: OptFields>(self) -> GFAParser<BString, T> {
         self.build()
     }
-
-    fn make_filter(&self) -> GFALineFilter {
-        let mut filter_string = BString::from("H");
-        if self.segments {
-            filter_string.push(b'S');
-        }
-        if self.links {
-            filter_string.push(b'L');
-        }
-        if self.containments {
-            filter_string.push(b'C');
-        }
-        if self.paths {
-            filter_string.push(b'P');
-        }
-        Box::new(move |s| {
-            if filter_string.contains_str(&s[0..1]) {
-                Some(s)
-            } else {
-                None
-            }
-        })
-    }
 }
 
 pub struct GFAParser<N: SegmentId, T: OptFields> {
-    filter: GFALineFilter,
+    segments: bool,
+    links: bool,
+    containments: bool,
+    paths: bool,
+    tolerance: ParserTolerance,
     _optional_fields: std::marker::PhantomData<T>,
     _segment_names: std::marker::PhantomData<N>,
 }
@@ -102,39 +104,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         Default::default()
     }
 
-    /// Filters a line before parsing, only passing through the lines
-    /// enabled in the config used to make this parser. NB: this will
-    /// probably change in the future; I was playing around with
-    /// storing the line filter as a closure for performance, but
-    /// still need to profile that aspect
-    fn filter_line<'a>(&self, line: &'a BStr) -> Option<&'a BStr> {
-        (self.filter)(line)
-    }
-
-    pub fn parse_line_bytes(&self, bytes: &[u8]) -> Option<Line<N, T>> {
-        let line: &BStr = bytes.trim().as_ref();
-        if let Some(line) = self.filter_line(line) {
-            let mut fields = line.split_str(b"\t");
-            let hdr = fields.next()?;
-            match hdr {
-                b"H" => Header::parse_line(fields).ok().map(Header::wrap),
-                b"S" => Segment::parse_line(fields).ok().map(Segment::wrap),
-                b"L" => Link::parse_line(fields).ok().map(Link::wrap),
-                b"C" => {
-                    Containment::parse_line(fields).ok().map(Containment::wrap)
-                }
-                b"P" => Path::parse_line(fields).ok().map(Path::wrap),
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn parse_gfa_line(
-        &self,
-        bytes: &[u8],
-    ) -> Result<Line<N, T>, ParseError> {
+    pub fn parse_gfa_line(&self, bytes: &[u8]) -> GFAResult<Line<N, T>> {
         let line: &BStr = bytes.trim().as_ref();
 
         let mut fields = line.split_str(b"\t");
@@ -145,10 +115,14 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
 
         let line = match hdr {
             b"H" => Header::parse_line(fields).map(Header::wrap),
-            b"S" => Segment::parse_line(fields).map(Segment::wrap),
-            b"L" => Link::parse_line(fields).map(Link::wrap),
-            b"C" => Containment::parse_line(fields).map(Containment::wrap),
-            b"P" => Path::parse_line(fields).map(Path::wrap),
+            b"S" if self.segments => {
+                Segment::parse_line(fields).map(Segment::wrap)
+            }
+            b"L" if self.links => Link::parse_line(fields).map(Link::wrap),
+            b"C" if self.containments => {
+                Containment::parse_line(fields).map(Containment::wrap)
+            }
+            b"P" if self.paths => Path::parse_line(fields).map(Path::wrap),
             _ => return Err(ParseError::UnknownLineType),
         }
         .map_err(invalid_line)?;
@@ -165,7 +139,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         for line in lines {
             match self.parse_gfa_line(line.as_ref()) {
                 Ok(parsed) => gfa.insert_line(parsed),
-                Err(err) if err.can_safely_continue() => (),
+                Err(err) if err.can_safely_continue(&self.tolerance) => (),
                 Err(err) => return Err(err),
             };
         }
@@ -191,7 +165,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
             let line = line?;
             match self.parse_gfa_line(line.as_ref()) {
                 Ok(parsed) => gfa.insert_line(parsed),
-                Err(err) if err.can_safely_continue() => (),
+                Err(err) if err.can_safely_continue(&self.tolerance) => (),
                 Err(err) => return Err(err),
             };
         }

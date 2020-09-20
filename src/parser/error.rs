@@ -3,6 +3,19 @@ use std::{error, fmt};
 pub type GFAFieldResult<T> = Result<T, ParseFieldError>;
 pub type GFAResult<T> = Result<T, ParseError>;
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ParserTolerance {
+    IgnoreAll,
+    Safe,
+    Pedantic,
+}
+
+impl Default for ParserTolerance {
+    fn default() -> Self {
+        Self::Safe
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ParseFieldError {
     /// A segment ID couldn't be parsed as a u64. Can only happen
@@ -133,19 +146,16 @@ impl ParseError {
         Self::InvalidLine(error, s.into())
     }
 
-    pub fn break_if_necessary(self) -> Result<(), ParseError> {
-        if self.can_safely_continue() {
-            Ok(())
-        } else {
-            Err(self)
-        }
-    }
-
-    pub const fn can_safely_continue(&self) -> bool {
-        match self {
-            ParseError::EmptyLine => true,
-            ParseError::UnknownLineType => true,
-            _ => false,
+    pub(crate) fn can_safely_continue(&self, tol: &ParserTolerance) -> bool {
+        use ParserTolerance as Tol;
+        match tol {
+            Tol::IgnoreAll => true,
+            Tol::Safe => match self {
+                ParseError::EmptyLine => true,
+                ParseError::UnknownLineType => true,
+                _ => false,
+            },
+            Tol::Pedantic => false,
         }
     }
 }
