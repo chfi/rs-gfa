@@ -226,7 +226,7 @@ where
 {
     let tmp = input.next()?;
     let bytes = tmp.as_ref();
-    std::str::from_utf8(bytes).ok().and_then(|p| p.parse().ok())
+    bytes.to_str().ok().and_then(|p| p.parse().ok())
 }
 
 fn parse_seq_fields<I>(mut input: I) -> Option<(BString, usize, (usize, usize))>

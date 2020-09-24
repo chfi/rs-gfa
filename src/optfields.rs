@@ -88,7 +88,6 @@ impl OptField {
             static ref RE_BYTES: Regex = Regex::new(r"(?-u)[0-9A-F]+").unwrap();
         }
 
-        use std::str::from_utf8;
         use OptFieldVal::*;
 
         let o_tag = input.get(0..=1)?;
@@ -106,13 +105,13 @@ impl OptField {
             // int
             b'i' => RE_INT
                 .find(o_contents)
-                .and_then(|s| from_utf8(s.as_bytes()).ok())
+                .and_then(|s| s.as_bytes().to_str().ok())
                 .and_then(|s| s.parse().ok())
                 .map(Int),
             // float
             b'f' => RE_FLOAT
                 .find(o_contents)
-                .and_then(|s| from_utf8(s.as_bytes()).ok())
+                .and_then(|s| s.as_bytes().to_str().ok())
                 .and_then(|s| s.parse().ok())
                 .map(Float),
             // string
@@ -128,7 +127,7 @@ impl OptField {
             // bytearray
             b'H' => RE_BYTES
                 .find(o_contents)
-                .and_then(|s| from_utf8(s.as_bytes()).ok())
+                .and_then(|s| s.as_bytes().to_str().ok())
                 .map(|s| s.chars().filter_map(|c| c.to_digit(16)))
                 .map(|s| H(s.collect())),
             // float or int array
@@ -136,7 +135,7 @@ impl OptField {
                 let first = o_contents[0];
                 let rest = o_contents[1..]
                     .split_str(b",")
-                    .filter_map(|s| from_utf8(s.as_bytes()).ok());
+                    .filter_map(|s| s.as_bytes().to_str().ok());
                 if first == b'f' {
                     Some(BFloat(rest.filter_map(|s| s.parse().ok()).collect()))
                 } else {

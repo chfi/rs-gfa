@@ -297,7 +297,7 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
         let contained_orient = parse_orientation(&mut input)?;
 
         let pos = next_field(&mut input)?;
-        let pos = std::str::from_utf8(pos.as_ref())?.parse()?;
+        let pos = pos.as_ref().to_str()?.parse()?;
 
         let overlap = next_field(&mut input)?.as_ref().into();
 

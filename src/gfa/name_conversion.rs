@@ -3,7 +3,7 @@ use crate::{
     optfields::*,
 };
 
-use bstr::{BStr, BString};
+use bstr::{BStr, BString, ByteSlice};
 
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
@@ -23,23 +23,16 @@ struct NameMapString {
 
 impl NameMapString {
     fn from_name_map(map: &NameMap) -> Self {
-        use std::str;
         let name_map: HashMap<String, usize> = map
             .name_map
             .iter()
-            .map(|(k, v)| {
-                let k_: String = str::from_utf8(k).unwrap().into();
-                (k_, *v)
-            })
+            .map(|(k, v)| (k.to_str().unwrap().into(), *v))
             .collect();
 
         let inverse_map: Vec<String> = map
             .inverse_map
             .iter()
-            .map(|k| {
-                let k_: String = str::from_utf8(k).unwrap().into();
-                k_
-            })
+            .map(|k| k.to_str().unwrap().into())
             .collect();
 
         NameMapString {
@@ -54,8 +47,8 @@ impl NameMapString {
             .name_map
             .iter()
             .map(|(k, v)| {
-                let k_: Vec<u8> = Vec::from(k.as_bytes());
-                (k_, *v)
+                let k: Vec<u8> = Vec::from(k.as_bytes());
+                (k, *v)
             })
             .collect();
 
@@ -119,7 +112,6 @@ impl NameMap {
         path: &Path<BString, T>,
     ) -> Option<Path<usize, T>> {
         let mut misses = 0;
-        println!("converting path segments");
         let new_segs: BString = path
             .iter()
             .filter_map(|(seg, o)| {
@@ -140,8 +132,6 @@ impl NameMap {
             })
             .collect();
 
-        // println!("path_len: {}\tnew_segs.len(): {}", path_len, new_segs.len());
-        // if path_len != new_segs.len() + 1 {
         if misses > 0 {
             return None;
         }
@@ -206,8 +196,6 @@ impl NameMap {
         let mut containments = Vec::with_capacity(gfa.containments.len());
         let mut paths = Vec::with_capacity(gfa.paths.len());
 
-        println!("converting segments");
-
         for seg in gfa.segments.iter() {
             let name = self.map_name(&seg.name)?;
             let mut new_seg: Segment<usize, T> = seg.nameless_clone();
@@ -215,7 +203,6 @@ impl NameMap {
             segments.push(new_seg);
         }
 
-        println!("converting links");
         for link in gfa.links.iter() {
             let from_name = self.map_name(&link.from_segment)?;
             let to_name = self.map_name(&link.to_segment)?;
@@ -225,7 +212,6 @@ impl NameMap {
             links.push(new_link);
         }
 
-        println!("converting containments");
         for cont in gfa.containments.iter() {
             let container_name = self.map_name(&cont.container_name)?;
             let contained_name = self.map_name(&cont.contained_name)?;
@@ -235,7 +221,6 @@ impl NameMap {
             containments.push(new_cont);
         }
 
-        println!("converting paths");
         for path in gfa.paths.iter() {
             let new_path = self.map_path_segments(path)?;
             paths.push(new_path);

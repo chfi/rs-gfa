@@ -1,6 +1,6 @@
 use crate::parser::ParseFieldError;
 
-use bstr::BString;
+use bstr::{BString, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
@@ -25,14 +25,7 @@ impl SegmentId for usize {
     const ERROR: ParseFieldError = ParseFieldError::UintIdError;
 
     fn parse_id(input: &[u8]) -> Option<Self> {
-        lazy_static! {
-            static ref RE: Regex =
-                Regex::new(r"(?-u)[!-)+-<>-~][!-~]*").unwrap();
-        }
-        RE.find(input).and_then(|bs| {
-            let s = std::str::from_utf8(bs.as_bytes()).unwrap();
-            s.parse::<usize>().ok()
-        })
+        input.to_str().ok()?.parse::<usize>().ok()
     }
 }
 

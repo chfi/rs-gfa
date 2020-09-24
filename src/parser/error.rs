@@ -1,5 +1,7 @@
 use std::{error, fmt};
 
+use bstr::ByteSlice;
+
 pub type GFAFieldResult<T> = Result<T, ParseFieldError>;
 pub type GFAResult<T> = Result<T, ParseError>;
 
@@ -50,6 +52,7 @@ macro_rules! impl_many_from {
 impl_many_from!(
     ParseFieldError,
     (std::str::Utf8Error, ParseFieldError::Utf8Error),
+    (bstr::Utf8Error, ParseFieldError::Utf8Error),
     (
         std::num::ParseIntError,
         ParseFieldError::ParseFromStringError
@@ -142,8 +145,9 @@ impl error::Error for ParseError {}
 
 impl ParseError {
     pub(crate) fn invalid_line(error: ParseFieldError, line: &[u8]) -> Self {
-        let s = std::str::from_utf8(line).unwrap();
-        Self::InvalidLine(error, s.into())
+        let mut dest = String::new();
+        line.to_str_lossy_into(&mut dest);
+        Self::InvalidLine(error, dest.into())
     }
 
     pub(crate) fn can_safely_continue(&self, tol: &ParserTolerance) -> bool {
