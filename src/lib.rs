@@ -1,3 +1,4 @@
+pub mod cigar;
 pub mod gafpaf;
 pub mod gfa;
 pub mod optfields;
