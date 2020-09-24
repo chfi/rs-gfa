@@ -1,14 +1,12 @@
 pub mod error;
 
+pub use self::error::{GFAFieldResult, GFAResult, ParseError, ParseFieldError};
+
 use bstr::{BStr, BString, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
 use crate::{gfa::*, optfields::*};
-
-pub use crate::parser::error::{
-    GFAFieldResult, GFAResult, ParseError, ParseFieldError,
-};
 
 use crate::parser::error::ParserTolerance;
 

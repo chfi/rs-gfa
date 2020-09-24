@@ -1,55 +1,14 @@
-use bstr::{BStr, BString, ByteSlice};
-use lazy_static::lazy_static;
-use regex::bytes::Regex;
-use serde::{Deserialize, Serialize};
+pub mod name_conversion;
+pub mod orientation;
+pub mod traits;
+
+pub use self::orientation::*;
+pub use self::traits::*;
 
 use crate::optfields::*;
-use crate::parser::ParseFieldError;
 
-/// Trait for the types that can be parsed and used as segment IDs;
-/// will probably only be usize and BString.
-pub trait SegmentId: Sized + Default {
-    const ERROR: ParseFieldError;
-
-    fn parse_id(input: &[u8]) -> Option<Self>;
-
-    fn parse_next<I>(mut input: I) -> Result<Self, ParseFieldError>
-    where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
-    {
-        let next = input.next().ok_or(ParseFieldError::MissingFields)?;
-        Self::parse_id(next.as_ref()).ok_or(Self::ERROR)
-    }
-}
-pub mod name_conversion;
-
-impl SegmentId for usize {
-    const ERROR: ParseFieldError = ParseFieldError::UintIdError;
-
-    fn parse_id(input: &[u8]) -> Option<Self> {
-        lazy_static! {
-            static ref RE: Regex =
-                Regex::new(r"(?-u)[!-)+-<>-~][!-~]*").unwrap();
-        }
-        RE.find(input).and_then(|bs| {
-            let s = std::str::from_utf8(bs.as_bytes()).unwrap();
-            s.parse::<usize>().ok()
-        })
-    }
-}
-
-impl SegmentId for BString {
-    const ERROR: ParseFieldError = ParseFieldError::Utf8Error;
-
-    fn parse_id(input: &[u8]) -> Option<Self> {
-        lazy_static! {
-            static ref RE: Regex =
-                Regex::new(r"(?-u)[!-)+-<>-~][!-~]*").unwrap();
-        }
-        RE.find(input).map(|s| BString::from(s.as_bytes()))
-    }
-}
+use bstr::{BStr, BString, ByteSlice};
+use serde::{Deserialize, Serialize};
 
 /// This module defines the various GFA line types, the GFA object,
 /// and some utility functions and types.
@@ -158,48 +117,6 @@ pub struct Segment<N, T: OptFields> {
     pub optional: T,
 }
 
-impl<N, T: OptFields> Segment<N, T> {
-    pub(crate) fn nameless_clone<M: Default>(&self) -> Segment<M, T> {
-        Segment {
-            name: Default::default(),
-            sequence: self.sequence.clone(),
-            optional: self.optional.clone(),
-        }
-    }
-}
-
-impl<N, T: OptFields> Link<N, T> {
-    pub(crate) fn nameless_clone<M: Default>(&self) -> Link<M, T> {
-        Link {
-            from_segment: Default::default(),
-            from_orient: self.from_orient,
-            to_segment: Default::default(),
-            to_orient: self.to_orient,
-            overlap: self.overlap.clone(),
-            optional: self.optional.clone(),
-        }
-    }
-}
-
-impl<N, T: OptFields> Containment<N, T> {
-    pub(crate) fn nameless_clone<M: Default>(&self) -> Containment<M, T> {
-        Containment {
-            container_name: Default::default(),
-            container_orient: self.container_orient,
-            contained_name: Default::default(),
-            contained_orient: self.contained_orient,
-            pos: self.pos,
-            overlap: self.overlap.clone(),
-            optional: self.optional.clone(),
-        }
-    }
-}
-
-fn parse_usize(bs: &BString) -> Option<usize> {
-    let s = std::str::from_utf8(bs.as_ref()).ok()?;
-    s.parse::<usize>().ok()
-}
-
 impl<T: OptFields> Segment<BString, T> {
     pub fn new(name: &[u8], sequence: &[u8]) -> Self {
         Segment {
@@ -239,19 +156,6 @@ impl<T: OptFields> Link<BString, T> {
             optional: Default::default(),
         }
     }
-
-    pub fn usize_name(&self) -> Option<Link<usize, T>> {
-        let from_segment = parse_usize(&self.from_segment)?;
-        let to_segment = parse_usize(&self.to_segment)?;
-        Some(Link {
-            from_segment,
-            from_orient: self.from_orient,
-            to_segment,
-            to_orient: self.to_orient,
-            overlap: self.overlap.clone(),
-            optional: self.optional.clone(),
-        })
-    }
 }
 
 #[derive(
@@ -265,22 +169,6 @@ pub struct Containment<N, T: OptFields> {
     pub pos: usize,
     pub overlap: BString,
     pub optional: T,
-}
-
-impl<T: OptFields> Containment<BString, T> {
-    pub fn usize_name(&self) -> Option<Containment<usize, T>> {
-        let container_name = parse_usize(&self.container_name)?;
-        let contained_name = parse_usize(&self.contained_name)?;
-        Some(Containment {
-            container_name,
-            container_orient: self.container_orient,
-            contained_name,
-            contained_orient: self.contained_orient,
-            pos: self.pos,
-            overlap: self.overlap.clone(),
-            optional: self.optional.clone(),
-        })
-    }
 }
 
 /// The step list that the path actually consists of is an unparsed
@@ -316,7 +204,7 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
 
 impl<N: SegmentId, T: OptFields> Path<N, T> {
     /// Parses (and copies!) a segment ID in the path segment list
-    pub fn parse_segment_id(input: &[u8]) -> Option<(N, Orientation)> {
+    fn parse_segment_id(input: &[u8]) -> Option<(N, Orientation)> {
         use Orientation::*;
         let last = input.len() - 1;
         let orient = match input[last] {
@@ -331,13 +219,14 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
 }
 
 impl<T: OptFields> Path<BString, T> {
-    /// `true` if each of the segment names of the path can be parsed to `usize`
-    pub fn usize_segments(&self) -> bool {
-        self.iter()
-            .all(|(seg, _)| seg.iter().all(|b| b.is_ascii_digit()))
+    /// Produces an iterator over the segments of the given path,
+    /// parsing the orientation and producing a slice to each segment
+    /// name
+    pub fn iter(&self) -> impl Iterator<Item = (&'_ BStr, Orientation)> {
+        self.segment_names.split_str(b",").map(Self::segment_id_ref)
     }
 
-    pub fn segment_id_ref(input: &[u8]) -> (&'_ BStr, Orientation) {
+    fn segment_id_ref(input: &[u8]) -> (&'_ BStr, Orientation) {
         use Orientation::*;
         let last = input.len() - 1;
         let orient = match input[last] {
@@ -347,28 +236,6 @@ impl<T: OptFields> Path<BString, T> {
         };
         let seg = &input[..last];
         (seg.as_ref(), orient)
-    }
-}
-
-impl<T: OptFields> Path<BString, T> {
-    /// Produces an iterator over the segments of the given path,
-    /// parsing the orientation and producing a slice to each segment
-    /// name
-    pub fn iter(&self) -> impl Iterator<Item = (&'_ BStr, Orientation)> {
-        self.segment_names.split_str(b",").map(Self::segment_id_ref)
-    }
-
-    pub fn usize_path(&self) -> Option<Path<usize, T>> {
-        if self.usize_segments() {
-            Some(Path::new(
-                self.path_name.clone(),
-                self.segment_names.clone(),
-                self.overlaps.clone(),
-                self.optional.clone(),
-            ))
-        } else {
-            None
-        }
     }
 }
 
@@ -384,107 +251,40 @@ impl<T: OptFields> Path<usize, T> {
     }
 }
 
-/// Represents segment orientation/strand
-#[derive(
-    Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
-)]
-pub enum Orientation {
-    Forward,
-    Backward,
-}
-
-impl Orientation {
-    /// Parse an orientation from a single-element, where + is
-    /// Forward, - is Backward
-    pub fn from_bytes_plus_minus<T: AsRef<[u8]>>(bs: T) -> Option<Self> {
-        match bs.as_ref() {
-            b"+" => Some(Orientation::Forward),
-            b"-" => Some(Orientation::Backward),
-            _ => None,
-        }
-    }
-
-    pub fn parse_error(opt: Option<Self>) -> Result<Self, ParseFieldError> {
-        opt.ok_or(ParseFieldError::OrientationError)
-    }
-
-    pub fn write_plus_minus(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        let sym = match self {
-            Self::Forward => '+',
-            Self::Backward => '-',
-        };
-        write!(f, "{}", sym)
-    }
-
-    pub fn plus_minus_as_byte(&self) -> u8 {
-        match self {
-            Self::Forward => b'+',
-            Self::Backward => b'-',
-        }
-    }
-
-    /// Parse an orientation from a single-element bytestring, where >
-    /// is Forward, < is Backward
-    pub fn from_bytes_gt_ln<T: AsRef<[u8]>>(bs: T) -> Option<Self> {
-        match bs.as_ref() {
-            b">" => Some(Orientation::Forward),
-            b"<" => Some(Orientation::Backward),
-            _ => None,
-        }
-    }
-
-    pub fn write_gt_ln(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        let sym = match self {
-            Self::Forward => '>',
-            Self::Backward => '<',
-        };
-        write!(f, "{}", sym)
-    }
-}
-
-/// Default orientation is forward
-impl Default for Orientation {
-    fn default() -> Orientation {
-        Orientation::Forward
-    }
-}
-
-/// Forward is true, backward is false
-impl From<Orientation> for bool {
-    fn from(o: Orientation) -> bool {
-        match o {
-            Orientation::Forward => true,
-            Orientation::Backward => false,
+impl<N, T: OptFields> Segment<N, T> {
+    pub(crate) fn nameless_clone<M: Default>(&self) -> Segment<M, T> {
+        Segment {
+            name: Default::default(),
+            sequence: self.sequence.clone(),
+            optional: self.optional.clone(),
         }
     }
 }
 
-impl Orientation {
-    pub fn is_reverse(&self) -> bool {
-        !bool::from(*self)
+impl<N, T: OptFields> Link<N, T> {
+    pub(crate) fn nameless_clone<M: Default>(&self) -> Link<M, T> {
+        Link {
+            from_segment: Default::default(),
+            from_orient: self.from_orient,
+            to_segment: Default::default(),
+            to_orient: self.to_orient,
+            overlap: self.overlap.clone(),
+            optional: self.optional.clone(),
+        }
     }
 }
 
-/// The default parser uses the GFA spec with + as Forward, - as Backward
-impl std::str::FromStr for Orientation {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Orientation::from_bytes_plus_minus(s.as_bytes())
-            .ok_or("Could not parse orientation (was not + or -)")
-    }
-}
-
-/// Display uses the GFA spec, mapping Forward to "+", Backward to "-"
-impl std::fmt::Display for Orientation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.write_plus_minus(f)
+impl<N, T: OptFields> Containment<N, T> {
+    pub(crate) fn nameless_clone<M: Default>(&self) -> Containment<M, T> {
+        Containment {
+            container_name: Default::default(),
+            container_orient: self.container_orient,
+            contained_name: Default::default(),
+            contained_orient: self.contained_orient,
+            pos: self.pos,
+            overlap: self.overlap.clone(),
+            optional: self.optional.clone(),
+        }
     }
 }
 
