@@ -113,10 +113,19 @@ pub enum Line<N, T: OptFields> {
 }
 
 /// The header line of a GFA graph
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Header<T: OptFields> {
     pub version: Option<BString>,
     pub optional: T,
+}
+
+impl<T: OptFields> Default for Header<T> {
+    fn default() -> Self {
+        Header {
+            version: Some("1.0".into()),
+            optional: Default::default(),
+        }
+    }
 }
 
 /// A segment in a GFA graph. Generic over the name type, but

@@ -106,11 +106,11 @@ impl NameMap {
         Ok(name_map.to_name_map())
     }
 
-    fn map_name<N: AsRef<[u8]>>(&self, name: N) -> Option<usize> {
+    pub fn map_name<N: AsRef<[u8]>>(&self, name: N) -> Option<usize> {
         self.name_map.get(name.as_ref()).copied()
     }
 
-    fn inverse_map_name(&self, id: usize) -> Option<&'_ BStr> {
+    pub fn inverse_map_name(&self, id: usize) -> Option<&'_ BStr> {
         self.inverse_map.get(id).map(|bs| bs.as_ref())
     }
 
