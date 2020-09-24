@@ -64,6 +64,25 @@ pub struct GFA<N, T: OptFields> {
     pub paths: Vec<Path<N, T>>,
 }
 
+/// Enum containing the different kinds of GFA lines.
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum Line<N, T: OptFields> {
+    Header(Header<T>),
+    Segment(Segment<N, T>),
+    Link(Link<N, T>),
+    Containment(Containment<N, T>),
+    Path(Path<N, T>),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum LineRef<'a, N, T: OptFields> {
+    Header(&'a Header<T>),
+    Segment(&'a Segment<N, T>),
+    Link(&'a Link<N, T>),
+    Containment(&'a Containment<N, T>),
+    Path(&'a Path<N, T>),
+}
+
 impl<N, T: OptFields> GFA<N, T> {
     /// Insert a GFA line (wrapped in the Line enum) into an existing
     /// GFA. Simply pushes it into the corresponding Vec in the GFA,
@@ -79,37 +98,36 @@ impl<N, T: OptFields> GFA<N, T> {
             Path(s) => self.paths.push(s),
         }
     }
-}
 
-/// Consume a GFA object to produce an iterator over all the lines
-/// contained within. The iterator first produces all segments, then
-/// links, then containments, and finally paths.
-pub fn gfa_into_iter<N, T: OptFields>(
-    gfa: GFA<N, T>,
-) -> impl Iterator<Item = Line<N, T>> {
-    use Line::*;
-    let segs = gfa.segments.into_iter().map(Segment);
-    let links = gfa.links.into_iter().map(Link);
-    let conts = gfa.containments.into_iter().map(Containment);
-    let paths = gfa.paths.into_iter().map(Path);
+    /// Consume a GFA object to produce an iterator over all the lines
+    /// contained within. The iterator first produces all segments, then
+    /// links, then containments, and finally paths.
+    pub fn lines_into_iter(self) -> impl Iterator<Item = Line<N, T>> {
+        use Line::*;
+        let segs = self.segments.into_iter().map(Segment);
+        let links = self.links.into_iter().map(Link);
+        let conts = self.containments.into_iter().map(Containment);
+        let paths = self.paths.into_iter().map(Path);
 
-    segs.chain(links).chain(conts).chain(paths)
+        segs.chain(links).chain(conts).chain(paths)
+    }
+
+    /// Return an iterator over references to the lines in the GFA
+    pub fn lines_iter<'a>(&'a self) -> impl Iterator<Item = LineRef<'a, N, T>> {
+        use LineRef::*;
+        let segs = self.segments.iter().map(Segment);
+        let links = self.links.iter().map(Link);
+        let conts = self.containments.iter().map(Containment);
+        let paths = self.paths.iter().map(Path);
+
+        segs.chain(links).chain(conts).chain(paths)
+    }
 }
 
 impl<N: SegmentId, T: OptFields> GFA<N, T> {
     pub fn new() -> Self {
         Default::default()
     }
-}
-
-/// Enum containing the different kinds of GFA lines.
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Line<N, T: OptFields> {
-    Header(Header<T>),
-    Segment(Segment<N, T>),
-    Link(Link<N, T>),
-    Containment(Containment<N, T>),
-    Path(Path<N, T>),
 }
 
 /// The header line of a GFA graph
