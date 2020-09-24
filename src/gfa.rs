@@ -22,6 +22,7 @@ pub trait SegmentId: Sized + Default {
         Self::parse_id(next.as_ref()).ok_or(Self::ERROR)
     }
 }
+pub mod name_conversion;
 
 impl SegmentId for usize {
     const ERROR: ParseFieldError = ParseFieldError::UintIdError;
