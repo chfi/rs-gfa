@@ -6,8 +6,22 @@ use std::convert::{TryFrom, TryInto};
 
 use nom::{bytes::complete::*, IResult};
 
+use serde::{Deserialize, Serialize};
+
 #[repr(u8)]
-#[derive(Contiguous, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Contiguous,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 pub enum CIGAROp {
     M = 0,
     I = 1,
@@ -107,7 +121,20 @@ impl std::str::FromStr for CIGAROp {
 /// A memory-efficient representation of a single CIGAR op + length, as
 /// a u32.
 #[repr(transparent)]
-#[derive(Zeroable, Pod, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Zeroable,
+    Pod,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 pub struct CIGARPair(u32);
 
 #[allow(clippy::len_without_is_empty)]
@@ -173,7 +200,18 @@ impl std::fmt::Display for CIGARPair {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    Default,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 // pub struct CIGAR(pub Vec<(u32, CIGAROp)>);
 pub struct CIGAR(pub Vec<CIGARPair>);
 

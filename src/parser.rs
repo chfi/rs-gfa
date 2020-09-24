@@ -6,7 +6,7 @@ use bstr::{BStr, BString, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
-use crate::{gfa::*, optfields::*};
+use crate::{cigar::CIGAR, gfa::*, optfields::*};
 
 use crate::parser::error::ParserTolerance;
 
@@ -335,8 +335,38 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
         let overlaps = next_field(&mut input)?
             .as_ref()
             .split_str(b",")
-            .map(BString::from)
+            .map(|bs| {
+                if bs == b"*" {
+                    None
+                } else {
+                    CIGAR::from_bytestring(bs)
+                }
+            })
             .collect();
+
+        /*
+        // special case for throwing away the *s if all overlaps are *
+        // faster but will require some more logic in the Path
+        // interface, so I'm sticking to the other one for now
+
+        let overlaps = next_field(&mut input)?;
+        let overlaps = overlaps
+            .as_ref()
+            .split_str(b",")
+            // .map(BString::from)
+            .map(|bs| {
+                if bs == b"*" {
+                    None
+                } else {
+                    CIGAR::from_bytestring(bs)
+                }
+            });
+
+        let (overlaps, none): (Vec<_>, Vec<_>) =
+            overlaps.partition(|x| x.is_some());
+        let overlaps = if overlaps.is_empty() { none } else { overlaps };
+        */
+        // .collect();
 
         let optional = T::parse(input);
 
@@ -418,12 +448,13 @@ mod tests {
     fn can_parse_path() {
         let path = "14\t11+,12-,13+\t4M,5M";
 
-        let path_: Path<BString, _> = Path::new(
-            "14".into(),
-            "11+,12-,13+".into(),
-            vec!["4M".into(), "5M".into()],
-            (),
-        );
+        let cigars = vec![b"4M", b"5M"]
+            .iter()
+            .map(|bs| CIGAR::from_bytestring(&bs[..]))
+            .collect();
+
+        let path_: Path<BString, _> =
+            Path::new("14".into(), "11+,12-,13+".into(), cigars, ());
 
         let fields = path.split_terminator('\t');
 

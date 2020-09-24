@@ -5,7 +5,7 @@ pub mod traits;
 pub use self::orientation::*;
 pub use self::traits::*;
 
-use crate::optfields::*;
+use crate::{cigar::CIGAR, optfields::*};
 
 use bstr::{BStr, BString, ByteSlice};
 use serde::{Deserialize, Serialize};
@@ -180,7 +180,7 @@ pub struct Containment<N, T: OptFields> {
 pub struct Path<N, T: OptFields> {
     pub path_name: BString,
     pub segment_names: BString,
-    pub overlaps: Vec<BString>,
+    pub overlaps: Vec<Option<CIGAR>>,
     pub optional: T,
     _segment_names: std::marker::PhantomData<N>,
 }
@@ -189,7 +189,7 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
     pub fn new(
         path_name: BString,
         segment_names: BString,
-        overlaps: Vec<BString>,
+        overlaps: Vec<Option<CIGAR>>,
         optional: T,
     ) -> Self {
         Path {
@@ -295,12 +295,15 @@ mod tests {
     #[test]
     fn path_iter() {
         use Orientation::*;
-        let path: Path<BString, _> = Path::new(
-            "14".into(),
-            "11+,12-,13+".into(),
-            vec!["4M".into(), "5M".into()],
-            (),
-        );
+
+        let cigars = vec![b"4M", b"5M"]
+            .iter()
+            .map(|bs| CIGAR::from_bytestring(&bs[..]))
+            .collect();
+
+        let path: Path<BString, _> =
+            Path::new("14".into(), "11+,12-,13+".into(), cigars, ());
+
         let mut path_iter = path.iter();
         assert_eq!(Some(("11".into(), Forward)), path_iter.next());
         assert_eq!(Some(("12".into(), Backward)), path_iter.next());

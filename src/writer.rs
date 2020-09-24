@@ -1,6 +1,6 @@
 use crate::gfa::*;
 use crate::optfields::*;
-use bstr::BString;
+use bstr::{BString, ByteSlice};
 use std::fmt::Display;
 use std::fmt::Write;
 
@@ -68,7 +68,11 @@ fn write_path<N, U: OptFields, T: Write>(path: &Path<N, U>, stream: &mut T) {
         if i != 0 {
             write!(stream, ",").unwrap();
         }
-        write!(stream, "{}", String::from_utf8(o.to_vec()).unwrap()).unwrap();
+        match o {
+            None => write!(stream, "*").unwrap(),
+            // Some(o) => write!(stream, "{}", o.to_str().unwrap()).unwrap(),
+            Some(o) => write!(stream, "{}", o).unwrap(),
+        }
     });
 
     write_optional_fields(&path.optional, stream);
@@ -140,12 +144,15 @@ mod tests {
 
     #[test]
     fn print_path() {
-        let path: Path<BString, _> = Path::new(
-            "path1".into(),
-            "13+,51-,241+".into(),
-            vec!["8M".into(), "1M".into(), "3M".into()],
-            (),
-        );
+        use crate::cigar::CIGAR;
+
+        let cigars = vec![b"8M", b"1M", b"3M"]
+            .iter()
+            .map(|bs| CIGAR::from_bytestring(&bs[..]))
+            .collect();
+
+        let path: Path<BString, _> =
+            Path::new("path1".into(), "13+,51-,241+".into(), cigars, ());
 
         let mut string = String::new();
         write_path(&path, &mut string);
