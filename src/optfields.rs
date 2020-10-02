@@ -11,7 +11,7 @@ pub type NoOptionalFields = ();
 
 /// An optional field a la SAM. Identified by its tag, which is any
 /// two characters matching [A-Za-z][A-Za-z0-9].
-#[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct OptField {
     pub tag: [u8; 2],
     pub value: OptFieldVal,
@@ -31,28 +31,6 @@ pub enum OptFieldVal {
     H(Vec<u32>),
     BInt(Vec<i64>),
     BFloat(Vec<f32>),
-}
-
-impl std::hash::Hash for OptFieldVal {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        use OptFieldVal::*;
-        match self {
-            A(x) => x.hash(state),
-            Int(x) => x.hash(state),
-            Float(f) => {
-                let bs: u32 = bytemuck::cast(*f);
-                bs.hash(state);
-            }
-            Z(x) => x.hash(state),
-            J(x) => x.hash(state),
-            H(x) => x.hash(state),
-            BInt(x) => x.hash(state),
-            BFloat(fs) => {
-                let bs: &[u32] = bytemuck::cast_slice(fs);
-                bs.hash(state);
-            }
-        }
-    }
 }
 
 impl OptField {
@@ -93,9 +71,6 @@ impl OptField {
         let o_tag = input.get(0..=1)?;
 
         let o_type = input.get(3)?;
-        if !b"AifZJHB".contains(&o_type) {
-            return None;
-        }
 
         let o_contents = input.get(5..)?;
 
@@ -142,10 +117,7 @@ impl OptField {
                     Some(BInt(rest.filter_map(|s| s.parse().ok()).collect()))
                 }
             }
-            _ => panic!(
-                "Tried to parse optional field with unknown type '{}'",
-                o_type,
-            ),
+            _ => None,
         }?;
 
         Some(Self::new(o_tag, o_val))
@@ -197,7 +169,7 @@ impl std::fmt::Display for OptField {
 /// itself are generic over the optional fields, so the choice of
 /// OptFields implementor can impact memory usage, which optional
 /// fields are parsed, and possibly more in the future
-pub trait OptFields: Sized + Default + Clone + std::hash::Hash {
+pub trait OptFields: Sized + Default + Clone {
     /// Return the optional field with the given tag, if it exists.
     fn get_field(&self, tag: &[u8]) -> Option<&OptField>;
 

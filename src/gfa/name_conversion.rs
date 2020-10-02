@@ -5,25 +5,58 @@ use crate::{
 
 use bstr::{BStr, BString, ByteSlice};
 
+use fnv::FnvHashMap;
+
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
 
 use serde::{Deserialize, Serialize};
 
+fn hash_gfa<T: OptFields>(gfa: &GFA<BString, T>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+
+    for seg in gfa.segments.iter() {
+        seg.name.hash(&mut hasher);
+        seg.sequence.hash(&mut hasher);
+    }
+    for link in gfa.links.iter() {
+        link.from_segment.hash(&mut hasher);
+        link.from_orient.hash(&mut hasher);
+        link.to_segment.hash(&mut hasher);
+        link.to_orient.hash(&mut hasher);
+        link.overlap.hash(&mut hasher);
+    }
+    for cont in gfa.containments.iter() {
+        cont.container_name.hash(&mut hasher);
+        cont.container_orient.hash(&mut hasher);
+        cont.contained_name.hash(&mut hasher);
+        cont.contained_orient.hash(&mut hasher);
+        cont.pos.hash(&mut hasher);
+        cont.overlap.hash(&mut hasher);
+    }
+
+    for path in gfa.paths.iter() {
+        path.path_name.hash(&mut hasher);
+        path.segment_names.hash(&mut hasher);
+    }
+
+    hasher.finish()
+}
+
 /// This is a helper struct for handling serialization/deserialization
 /// of NameMaps to text-based formats such as ASCII
 #[derive(Serialize, Deserialize)]
 struct NameMapString {
-    pub(crate) name_map: HashMap<String, usize>,
+    pub(crate) name_map: FnvHashMap<String, usize>,
     pub(crate) inverse_map: Vec<String>,
     pub(crate) hash: u64,
 }
 
 impl NameMapString {
     fn from_name_map(map: &NameMap) -> Self {
-        let name_map: HashMap<String, usize> = map
+        let name_map: FnvHashMap<String, usize> = map
             .name_map
             .iter()
             .map(|(k, v)| (k.to_str().unwrap().into(), *v))
@@ -42,8 +75,8 @@ impl NameMapString {
         }
     }
 
-    fn to_name_map(self) -> NameMap {
-        let name_map: HashMap<Vec<u8>, usize> = self
+    fn into_name_map(self) -> NameMap {
+        let name_map: FnvHashMap<Vec<u8>, usize> = self
             .name_map
             .iter()
             .map(|(k, v)| {
@@ -68,7 +101,7 @@ impl NameMapString {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct NameMap {
-    pub(crate) name_map: HashMap<Vec<u8>, usize>,
+    pub(crate) name_map: FnvHashMap<Vec<u8>, usize>,
     pub(crate) inverse_map: Vec<BString>,
     /// The hash is calculated on the GFA<BString, _> value
     pub(crate) hash: u64,
@@ -96,7 +129,7 @@ impl NameMap {
         let file = File::open(path.as_ref())?;
         let reader = BufReader::new(file);
         let name_map: NameMapString = serde_json::from_reader(reader)?;
-        Ok(name_map.to_name_map())
+        Ok(name_map.into_name_map())
     }
 
     pub fn map_name<N: AsRef<[u8]>>(&self, name: N) -> Option<usize> {
@@ -187,8 +220,10 @@ impl NameMap {
         gfa: &GFA<BString, T>,
         check_hash: bool,
     ) -> Option<GFA<usize, T>> {
-        if check_hash && !self.gfa_hash_error(gfa) {
-            return None;
+        if check_hash {
+            if hash_gfa(gfa) != self.hash {
+                return None;
+            }
         }
 
         let mut segments = Vec::with_capacity(gfa.segments.len());
@@ -283,26 +318,8 @@ impl NameMap {
         })
     }
 
-    pub fn gfa_hash_error<T: OptFields>(&self, gfa: &GFA<BString, T>) -> bool {
-        let mut hasher = DefaultHasher::new();
-
-        for seg in gfa.segments.iter() {
-            seg.hash(&mut hasher);
-        }
-        for link in gfa.links.iter() {
-            link.hash(&mut hasher);
-        }
-        for cont in gfa.containments.iter() {
-            cont.hash(&mut hasher);
-        }
-
-        let hash = hasher.finish();
-
-        hash != self.hash
-    }
-
     pub fn build_from_gfa<T: OptFields>(gfa: &GFA<BString, T>) -> Self {
-        let mut name_map = HashMap::with_capacity(gfa.segments.len());
+        let mut name_map = FnvHashMap::default();
         let mut inverse_map = Vec::with_capacity(gfa.segments.len());
 
         let mut get_ix = |name: &BStr| {
@@ -318,19 +335,16 @@ impl NameMap {
             }
         };
 
-        let mut hasher = DefaultHasher::new();
+        let hash = hash_gfa(gfa);
 
         for seg in gfa.segments.iter() {
-            seg.hash(&mut hasher);
             get_ix(seg.name.as_ref());
         }
         for link in gfa.links.iter() {
-            link.hash(&mut hasher);
             get_ix(link.from_segment.as_ref());
             get_ix(link.from_segment.as_ref());
         }
         for cont in gfa.containments.iter() {
-            cont.hash(&mut hasher);
             get_ix(cont.container_name.as_ref());
             get_ix(cont.contained_name.as_ref());
         }
@@ -338,7 +352,7 @@ impl NameMap {
         NameMap {
             name_map,
             inverse_map,
-            hash: hasher.finish(),
+            hash,
         }
     }
 }

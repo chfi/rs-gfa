@@ -73,7 +73,7 @@ impl<N, T: OptFields> GFA<N, T> {
     }
 
     /// Return an iterator over references to the lines in the GFA
-    pub fn lines_iter<'a>(&'a self) -> impl Iterator<Item = LineRef<'a, N, T>> {
+    pub fn lines_iter(&'_ self) -> impl Iterator<Item = LineRef<'_, N, T>> {
         use LineRef::*;
         let segs = self.segments.iter().map(Segment);
         let links = self.links.iter().map(Link);

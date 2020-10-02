@@ -1,8 +1,4 @@
-use bstr::{BString, ByteSlice};
-
 use bytemuck::{Contiguous, Pod, Zeroable};
-
-use std::convert::{TryFrom, TryInto};
 
 use nom::{bytes::complete::*, IResult};
 
@@ -35,10 +31,6 @@ pub enum CIGAROp {
 }
 
 impl CIGAROp {
-    fn to_u8_byte(self) -> u8 {
-        self.into_integer()
-    }
-
     fn from_u8_byte(value: u8) -> Option<Self> {
         Self::from_integer(value)
     }
@@ -74,6 +66,7 @@ impl CIGAROp {
         }
     }
 
+    #[inline]
     pub fn consumes_query(&self) -> bool {
         use CIGAROp::*;
         match self {
@@ -82,6 +75,7 @@ impl CIGAROp {
         }
     }
 
+    #[inline]
     pub fn consumes_reference(&self) -> bool {
         use CIGAROp::*;
         match self {
@@ -90,6 +84,7 @@ impl CIGAROp {
         }
     }
 
+    #[inline]
     pub fn is_match_or_mismatch(&self) -> bool {
         use CIGAROp::*;
         match self {
@@ -147,19 +142,23 @@ impl CIGARPair {
         }
     }
 
+    #[inline]
     pub fn zero(op: CIGAROp) -> Self {
         CIGARPair(op.into_integer() as u32)
     }
 
+    #[inline]
     pub fn len(&self) -> u32 {
         self.0 >> 4
     }
 
+    #[inline]
     pub fn set_len(&mut self, len: u32) {
         assert!(len < (1 << 28));
         self.0 = len << 4 | self.op() as u32;
     }
 
+    #[inline]
     pub fn op(&self) -> CIGAROp {
         let op = (self.0 & 0xF) as u8;
         CIGAROp::from_u8_byte(op).unwrap()
@@ -175,9 +174,9 @@ impl CIGARPair {
         CIGARPair((len << 4) | (op.into_integer()) as u32)
     }
 
-    fn bytes_as_cigar_pair(bytes: &[u8]) -> Option<&Self> {
-        bytemuck::try_from_bytes(bytes).ok()
-    }
+    // fn bytes_as_cigar_pair(bytes: &[u8]) -> Option<&Self> {
+    //     bytemuck::try_from_bytes(bytes).ok()
+    // }
 }
 
 impl From<u32> for CIGARPair {
@@ -216,7 +215,7 @@ impl std::fmt::Display for CIGARPair {
 pub struct CIGAR(pub Vec<CIGARPair>);
 
 impl CIGAR {
-    fn from_pairs<I>(pairs: I) -> Self
+    pub fn from_pairs<I>(pairs: I) -> Self
     where
         I: IntoIterator<Item = (u32, CIGAROp)>,
     {
