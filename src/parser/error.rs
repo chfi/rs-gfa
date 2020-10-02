@@ -6,7 +6,7 @@ pub type GFAFieldResult<T> = Result<T, ParseFieldError>;
 pub type GFAResult<T> = Result<T, ParseError>;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum ParserTolerance {
+pub enum ParserTolerance {
     IgnoreAll,
     Safe,
     Pedantic,

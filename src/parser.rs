@@ -16,7 +16,7 @@ pub struct GFAParserBuilder {
     pub links: bool,
     pub containments: bool,
     pub paths: bool,
-    tolerance: ParserTolerance,
+    pub tolerance: ParserTolerance,
 }
 
 impl GFAParserBuilder {
@@ -191,10 +191,12 @@ where
 }
 
 impl<T: OptFields> Header<T> {
+    #[inline]
     fn wrap<N: SegmentId>(self) -> Line<N, T> {
         Line::Header(self)
     }
 
+    #[inline]
     fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
@@ -231,10 +233,12 @@ where
 }
 
 impl<N: SegmentId, T: OptFields> Segment<N, T> {
+    #[inline]
     fn wrap(self) -> Line<N, T> {
         Line::Segment(self)
     }
 
+    #[inline]
     fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
@@ -252,10 +256,12 @@ impl<N: SegmentId, T: OptFields> Segment<N, T> {
 }
 
 impl<N: SegmentId, T: OptFields> Link<N, T> {
+    #[inline]
     fn wrap(self) -> Line<N, T> {
         Line::Link(self)
     }
 
+    #[inline]
     fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
@@ -281,10 +287,12 @@ impl<N: SegmentId, T: OptFields> Link<N, T> {
 }
 
 impl<N: SegmentId, T: OptFields> Containment<N, T> {
+    #[inline]
     fn wrap(self) -> Line<N, T> {
         Line::Containment(self)
     }
 
+    #[inline]
     fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
@@ -316,10 +324,12 @@ impl<N: SegmentId, T: OptFields> Containment<N, T> {
 }
 
 impl<N: SegmentId, T: OptFields> Path<N, T> {
+    #[inline]
     fn wrap(self) -> Line<N, T> {
         Line::Path(self)
     }
 
+    #[inline]
     fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
     where
         I: Iterator,
