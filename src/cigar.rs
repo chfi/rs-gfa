@@ -379,33 +379,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cigarop_getters() {
-        use CIGAROp as CG;
-        let cigarops = (0..=8)
-            .into_iter()
-            .map(|b| CIGAROp::from_u8_byte(b).unwrap())
-            .collect::<Vec<_>>();
-
-        let cigarpairs_zeros = cigarops
-            .iter()
-            .enumerate()
-            .map(|(i, op)| CIGARPair::from_pair((i as u32, *op)))
-            .collect::<Vec<_>>();
-
-        for pairs in cigarpairs_zeros.iter() {
-            let op_u8 = pairs.op().into_integer();
-            let op = pairs.op();
-        }
-        // println!("{:?}", cigarops);
-    }
-
-    #[test]
     fn cigar_display() {
         let input = b"20M12D3M4N9S10H5P11=9X";
         let input_str = std::str::from_utf8(input).unwrap();
         let cigar = CIGAR::parser_bytestring(input).unwrap().1;
         let cigstr = cigar.to_string();
-        // assert_eq!(input_str, cigstr);
+        assert_eq!(input_str, cigstr);
     }
 
     #[test]
