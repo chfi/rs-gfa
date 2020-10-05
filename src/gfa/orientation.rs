@@ -4,7 +4,16 @@ use crate::parser::ParseFieldError;
 
 /// Represents segment orientation/strand
 #[derive(
-    Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Hash,
 )]
 pub enum Orientation {
     Forward,
