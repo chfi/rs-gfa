@@ -78,6 +78,7 @@ impl GFAParserBuilder {
     }
 }
 
+#[derive(Clone)]
 pub struct GFAParser<N: SegmentId, T: OptFields> {
     segments: bool,
     links: bool,
@@ -170,6 +171,54 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
 
         Ok(gfa)
     }
+}
+
+pub struct GFAParserLineIter<I, N, T>
+where
+    N: SegmentId,
+    T: OptFields,
+    I: Iterator,
+    I::Item: AsRef<[u8]>,
+{
+    parser: GFAParser<N, T>,
+    iter: I,
+}
+
+impl<I, N, T> GFAParserLineIter<I, N, T>
+where
+    N: SegmentId,
+    T: OptFields,
+    I: Iterator,
+    I::Item: AsRef<[u8]>,
+{
+    pub fn from_parser(parser: GFAParser<N, T>, iter: I) -> Self {
+        Self { parser, iter }
+    }
+}
+
+impl<I, N, T> Iterator for GFAParserLineIter<I, N, T>
+where
+    N: SegmentId,
+    T: OptFields,
+    I: Iterator,
+    I::Item: AsRef<[u8]>,
+{
+    type Item = GFAResult<Line<N, T>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_line = self.iter.next()?;
+        let result = self.parser.parse_gfa_line(next_line.as_ref());
+        Some(result)
+    }
+}
+
+impl<I, N, T> std::iter::FusedIterator for GFAParserLineIter<I, N, T>
+where
+    N: SegmentId,
+    T: OptFields,
+    I: Iterator,
+    I::Item: AsRef<[u8]>,
+{
 }
 
 fn next_field<I, P>(mut input: I) -> GFAFieldResult<P>
