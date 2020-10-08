@@ -214,7 +214,7 @@ impl OptFields for () {
 /// be efficient enough.
 impl OptFields for Vec<OptField> {
     fn get_field(&self, tag: &[u8]) -> Option<&OptField> {
-        self.iter().find(|o| o.tag == tag).map(|v| v)
+        self.iter().find(|o| o.tag == tag)
     }
 
     fn fields(&self) -> &[OptField] {

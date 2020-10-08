@@ -108,9 +108,28 @@ impl std::str::FromStr for Orientation {
     }
 }
 
-/// Display uses the GFA spec, mapping Forward to "+", Backward to "-"
+/// Display uses the GFA spec if the `{}` format argument is used,
+/// mapping `Forward` to "+", `Backward` to "-". If the alternate
+/// format flag is used, i.e. `{:#}`, `Forward` will be mapped to ">",
+/// `Backward` to "<".
+///
+/// # Examples
+///
+/// ```
+/// use std::fmt;
+/// use gfa::gfa::Orientation as O;
+///
+/// assert_eq!(&format!("{}", O::Forward), "+");
+/// assert_eq!(&format!("{}", O::Backward), "-");
+/// assert_eq!(&format!("{:#}", O::Forward), ">");
+/// assert_eq!(&format!("{:#}", O::Backward), "<");
+/// ```
 impl std::fmt::Display for Orientation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.write_plus_minus(f)
+        if f.alternate() {
+            self.write_gt_ln(f)
+        } else {
+            self.write_plus_minus(f)
+        }
     }
 }

@@ -147,7 +147,7 @@ impl ParseError {
     pub(crate) fn invalid_line(error: ParseFieldError, line: &[u8]) -> Self {
         let mut dest = String::new();
         line.to_str_lossy_into(&mut dest);
-        Self::InvalidLine(error, dest.into())
+        Self::InvalidLine(error, dest)
     }
 
     pub(crate) fn can_safely_continue(&self, tol: &ParserTolerance) -> bool {
