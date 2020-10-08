@@ -560,6 +560,32 @@ mod tests {
     }
 
     #[test]
+    fn gfa_parser_line_iter() {
+        use {
+            bstr::io::BufReadExt,
+            std::{fs::File, io::BufReader},
+        };
+
+        let parser: GFAParser<usize, ()> = GFAParser::new();
+        let file = File::open(&"./test/gfas/lil.gfa").unwrap();
+        let lines = BufReader::new(file).byte_lines().map(|x| x.unwrap());
+        let parser_iter = GFAParserLineIter::from_parser(parser, lines);
+
+        let segment_names = parser_iter
+            .filter_map(|line| {
+                let line = line.ok()?;
+                if let Line::Segment(seg) = line {
+                    Some(seg.name)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(segment_names, (1..=15).into_iter().collect::<Vec<_>>());
+    }
+
+    #[test]
     fn segment_parser() {
         use OptFieldVal::*;
         let name = "11";
