@@ -574,11 +574,9 @@ mod tests {
         let segment_names = parser_iter
             .filter_map(|line| {
                 let line = line.ok()?;
-                if let Line::Segment(seg) = line {
-                    Some(seg.name)
-                } else {
-                    None
-                }
+                let seg = line.some_segment()?;
+
+                Some(seg.name)
             })
             .collect::<Vec<_>>();
 

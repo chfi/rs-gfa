@@ -34,6 +34,26 @@ pub enum Line<N, T: OptFields> {
     Path(Path<N, T>),
 }
 
+macro_rules! some_line_fn {
+    ($name:ident, $tgt:ty, $variant:path) => {
+        impl<N, T: OptFields> Line<N, T> {
+            pub fn $name(self) -> Option<$tgt> {
+                if let $variant(x) = self {
+                    Some(x)
+                } else {
+                    None
+                }
+            }
+        }
+    };
+}
+
+some_line_fn!(some_header, Header<T>, Line::Header);
+some_line_fn!(some_segment, Segment<N, T>, Line::Segment);
+some_line_fn!(some_link, Link<N, T>, Line::Link);
+some_line_fn!(some_containment, Containment<N, T>, Line::Containment);
+some_line_fn!(some_path, Path<N, T>, Line::Path);
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum LineRef<'a, N, T: OptFields> {
     Header(&'a Header<T>),
