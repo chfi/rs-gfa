@@ -54,6 +54,26 @@ some_line_fn!(some_link, Link<N, T>, Line::Link);
 some_line_fn!(some_containment, Containment<N, T>, Line::Containment);
 some_line_fn!(some_path, Path<N, T>, Line::Path);
 
+macro_rules! some_line_ref_fn {
+    ($name:ident, $tgt:ty, $variant:path) => {
+        impl<'a, N, T: OptFields> LineRef<'a, N, T> {
+            pub fn $name(self) -> Option<&'a $tgt> {
+                if let $variant(x) = self {
+                    Some(x)
+                } else {
+                    None
+                }
+            }
+        }
+    };
+}
+
+some_line_ref_fn!(some_header, Header<T>, LineRef::Header);
+some_line_ref_fn!(some_segment, Segment<N, T>, LineRef::Segment);
+some_line_ref_fn!(some_link, Link<N, T>, LineRef::Link);
+some_line_ref_fn!(some_containment, Containment<N, T>, LineRef::Containment);
+some_line_ref_fn!(some_path, Path<N, T>, LineRef::Path);
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum LineRef<'a, N, T: OptFields> {
     Header(&'a Header<T>),
@@ -329,5 +349,18 @@ mod tests {
         assert_eq!(Some(("12".into(), Backward)), path_iter.next());
         assert_eq!(Some(("13".into(), Forward)), path_iter.next());
         assert_eq!(None, path_iter.next());
+    }
+
+    #[test]
+    fn gfa_line_ref_iter() {
+        let parser: crate::parser::GFAParser<usize, ()> =
+            crate::parser::GFAParser::new();
+        let gfa = parser.parse_file(&"./test/gfas/lil.gfa").unwrap();
+        let gfa_lineref = gfa.lines_iter();
+
+        for line in gfa_lineref {
+            let seg = line.some_segment();
+            println!("{:?}", seg);
+        }
     }
 }
