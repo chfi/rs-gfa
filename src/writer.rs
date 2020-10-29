@@ -1,7 +1,7 @@
 use crate::{gfa::*, optfields::*};
 
-use bstr::{BString, ByteSlice, ByteVec};
-use std::fmt::{Display, Write};
+use bstr::ByteSlice;
+use std::fmt::Write;
 
 /// This entire module will probably be removed, with the functions
 /// replaced by Display implementations on GFA and the GFA line types,

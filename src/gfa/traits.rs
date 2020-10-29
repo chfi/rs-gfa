@@ -1,6 +1,6 @@
 use crate::parser::ParseFieldError;
 
-use bstr::{BString, ByteSlice};
+use bstr::ByteSlice;
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 

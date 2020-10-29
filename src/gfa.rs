@@ -7,7 +7,7 @@ pub use self::traits::*;
 
 use crate::{cigar::CIGAR, optfields::*};
 
-use bstr::{BStr, BString, ByteSlice};
+use bstr::{BStr, ByteSlice};
 use serde::{Deserialize, Serialize};
 
 /// This module defines the various GFA line types, the GFA object,

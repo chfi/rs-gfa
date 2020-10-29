@@ -3,7 +3,7 @@ use crate::{
     optfields::*,
 };
 
-use bstr::{BStr, BString, ByteSlice, ByteVec};
+use bstr::{ByteSlice, ByteVec};
 
 use fnv::FnvHashMap;
 
@@ -220,6 +220,7 @@ impl NameMap {
         gfa: &GFA<Vec<u8>, T>,
         check_hash: bool,
     ) -> Option<GFA<usize, T>> {
+        #[allow(clippy::collapsible_if)]
         if check_hash {
             if hash_gfa(gfa) != self.hash {
                 return None;
@@ -325,12 +326,11 @@ impl NameMap {
 
         let mut get_ix = |name: &[u8]| {
             let name: Vec<u8> = Vec::from_slice(name);
-            let vec_name = Vec::from(name.clone());
-            if let Some(ix) = name_map.get(&vec_name) {
+            if let Some(ix) = name_map.get(&name) {
                 *ix
             } else {
                 let ix = name_map.len();
-                name_map.insert(vec_name, ix);
+                name_map.insert(name.clone(), ix);
                 inverse_map.push(name);
                 ix
             }

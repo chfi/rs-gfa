@@ -2,7 +2,7 @@ pub mod error;
 
 pub use self::error::{GFAFieldResult, GFAResult, ParseError, ParseFieldError};
 
-use bstr::{BStr, BString, ByteSlice};
+use bstr::{BStr, ByteSlice};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
