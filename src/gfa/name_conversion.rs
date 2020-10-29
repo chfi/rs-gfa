@@ -3,7 +3,7 @@ use crate::{
     optfields::*,
 };
 
-use bstr::{BStr, BString, ByteSlice};
+use bstr::{BStr, BString, ByteSlice, ByteVec};
 
 use fnv::FnvHashMap;
 
@@ -14,7 +14,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-fn hash_gfa<T: OptFields>(gfa: &GFA<BString, T>) -> u64 {
+fn hash_gfa<T: OptFields>(gfa: &GFA<Vec<u8>, T>) -> u64 {
     let mut hasher = DefaultHasher::new();
 
     for seg in gfa.segments.iter() {
@@ -85,7 +85,7 @@ impl NameMapString {
             })
             .collect();
 
-        let inverse_map: Vec<BString> = self
+        let inverse_map: Vec<Vec<u8>> = self
             .inverse_map
             .iter()
             .map(|k| k.as_bytes().into())
@@ -102,8 +102,8 @@ impl NameMapString {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct NameMap {
     pub(crate) name_map: FnvHashMap<Vec<u8>, usize>,
-    pub(crate) inverse_map: Vec<BString>,
-    /// The hash is calculated on the GFA<BString, _> value
+    pub(crate) inverse_map: Vec<Vec<u8>>,
+    /// The hash is calculated on the GFA<Vec<u8>, _> value
     pub(crate) hash: u64,
 }
 
@@ -136,16 +136,16 @@ impl NameMap {
         self.name_map.get(name.as_ref()).copied()
     }
 
-    pub fn inverse_map_name(&self, id: usize) -> Option<&'_ BStr> {
+    pub fn inverse_map_name(&self, id: usize) -> Option<&'_ [u8]> {
         self.inverse_map.get(id).map(|bs| bs.as_ref())
     }
 
     fn map_path_segments<T: OptFields>(
         &self,
-        path: &Path<BString, T>,
+        path: &Path<Vec<u8>, T>,
     ) -> Option<Path<usize, T>> {
         let mut misses = 0;
-        let new_segs: BString = path
+        let new_segs: Vec<u8> = path
             .iter()
             .filter_map(|(seg, o)| {
                 let n = self.map_name(seg).map(|s| (s, o));
@@ -180,9 +180,9 @@ impl NameMap {
     fn inverse_map_path_segments<T: OptFields>(
         &self,
         path: &Path<usize, T>,
-    ) -> Option<Path<BString, T>> {
+    ) -> Option<Path<Vec<u8>, T>> {
         let mut misses = 0;
-        let new_segs: BString = path
+        let new_segs: Vec<u8> = path
             .iter()
             .filter_map(|(seg, o)| {
                 let n = self.inverse_map.get(seg).map(|s| (s, o));
@@ -194,9 +194,9 @@ impl NameMap {
             .enumerate()
             .flat_map(|(i, (seg, o))| {
                 let s = if i == 0 {
-                    format!("{}{}", seg, o)
+                    format!("{}{}", seg.as_bstr(), o)
                 } else {
-                    format!(",{}{}", seg, o)
+                    format!(",{}{}", seg.as_bstr(), o)
                 };
                 Vec::from(s.as_bytes())
             })
@@ -215,9 +215,9 @@ impl NameMap {
         Some(new_path)
     }
 
-    pub fn gfa_bstring_to_usize<T: OptFields>(
+    pub fn gfa_bytestring_to_usize<T: OptFields>(
         &self,
-        gfa: &GFA<BString, T>,
+        gfa: &GFA<Vec<u8>, T>,
         check_hash: bool,
     ) -> Option<GFA<usize, T>> {
         if check_hash {
@@ -270,10 +270,10 @@ impl NameMap {
         })
     }
 
-    pub fn gfa_usize_to_bstring<T: OptFields>(
+    pub fn gfa_usize_to_bytestring<T: OptFields>(
         &self,
         gfa: &GFA<usize, T>,
-    ) -> Option<GFA<BString, T>> {
+    ) -> Option<GFA<Vec<u8>, T>> {
         let mut segments = Vec::with_capacity(gfa.segments.len());
         let mut links = Vec::with_capacity(gfa.links.len());
         let mut containments = Vec::with_capacity(gfa.containments.len());
@@ -281,26 +281,27 @@ impl NameMap {
 
         for seg in gfa.segments.iter() {
             let name = self.inverse_map_name(seg.name)?;
-            let mut new_seg: Segment<BString, T> = seg.nameless_clone();
-            new_seg.name = name.into();
+            let mut new_seg: Segment<Vec<u8>, T> = seg.nameless_clone();
+            // new_seg.name = name.into();
+            new_seg.name = Vec::from_slice(name);
             segments.push(new_seg);
         }
 
         for link in gfa.links.iter() {
             let from_name = self.inverse_map_name(link.from_segment)?;
             let to_name = self.inverse_map_name(link.to_segment)?;
-            let mut new_link: Link<BString, T> = link.nameless_clone();
-            new_link.from_segment = from_name.into();
-            new_link.to_segment = to_name.into();
+            let mut new_link: Link<Vec<u8>, T> = link.nameless_clone();
+            new_link.from_segment = Vec::from_slice(from_name);
+            new_link.to_segment = Vec::from_slice(to_name);
             links.push(new_link);
         }
 
         for cont in gfa.containments.iter() {
             let container_name = self.inverse_map_name(cont.container_name)?;
             let contained_name = self.inverse_map_name(cont.contained_name)?;
-            let mut new_cont: Containment<BString, T> = cont.nameless_clone();
-            new_cont.container_name = container_name.into();
-            new_cont.contained_name = contained_name.into();
+            let mut new_cont: Containment<Vec<u8>, T> = cont.nameless_clone();
+            new_cont.container_name = Vec::from_slice(container_name);
+            new_cont.contained_name = Vec::from_slice(contained_name);
             containments.push(new_cont);
         }
 
@@ -318,12 +319,12 @@ impl NameMap {
         })
     }
 
-    pub fn build_from_gfa<T: OptFields>(gfa: &GFA<BString, T>) -> Self {
+    pub fn build_from_gfa<T: OptFields>(gfa: &GFA<Vec<u8>, T>) -> Self {
         let mut name_map = FnvHashMap::default();
         let mut inverse_map = Vec::with_capacity(gfa.segments.len());
 
-        let mut get_ix = |name: &BStr| {
-            let name: BString = name.into();
+        let mut get_ix = |name: &[u8]| {
+            let name: Vec<u8> = Vec::from_slice(name);
             let vec_name = Vec::from(name.clone());
             if let Some(ix) = name_map.get(&vec_name) {
                 *ix
@@ -370,25 +371,26 @@ mod tests {
         "./test/gfas/lil_map.json"
     }
 
-    fn load_diatom_gfa() -> GFA<BString, OptionalFields> {
+    fn load_diatom_gfa() -> GFA<Vec<u8>, OptionalFields> {
         let parser = GFAParser::new();
-        let gfa: GFA<BString, OptionalFields> =
+        let gfa: GFA<Vec<u8>, OptionalFields> =
             parser.parse_file(&"./test/gfas/diatom.gfa").unwrap();
         gfa
     }
 
-    fn load_lil_gfa() -> GFA<BString, OptionalFields> {
+    fn load_lil_gfa() -> GFA<Vec<u8>, OptionalFields> {
         let parser = GFAParser::new();
-        let gfa: GFA<BString, OptionalFields> =
+        let gfa: GFA<Vec<u8>, OptionalFields> =
             parser.parse_file(&"./test/gfas/lil.gfa").unwrap();
         gfa
     }
 
-    fn test_isomorphism(original_gfa: &GFA<BString, OptionalFields>) {
+    fn test_isomorphism(original_gfa: &GFA<Vec<u8>, OptionalFields>) {
         let name_map = NameMap::build_from_gfa(original_gfa);
 
-        let usize_gfa =
-            name_map.gfa_bstring_to_usize(&original_gfa, false).unwrap();
+        let usize_gfa = name_map
+            .gfa_bytestring_to_usize(&original_gfa, false)
+            .unwrap();
 
         assert_eq!(original_gfa.segments.len(), usize_gfa.segments.len());
         assert_eq!(original_gfa.links.len(), usize_gfa.links.len());
@@ -398,7 +400,8 @@ mod tests {
         );
         assert_eq!(original_gfa.paths.len(), usize_gfa.paths.len());
 
-        let inverted_gfa = name_map.gfa_usize_to_bstring(&usize_gfa).unwrap();
+        let inverted_gfa =
+            name_map.gfa_usize_to_bytestring(&usize_gfa).unwrap();
 
         assert_eq!(original_gfa, &inverted_gfa);
     }
@@ -432,7 +435,7 @@ mod tests {
         let gfa = load_diatom_gfa();
         let name_map = NameMap::build_from_gfa(&gfa);
 
-        let new_gfa = name_map.gfa_bstring_to_usize(&gfa, false).unwrap();
+        let new_gfa = name_map.gfa_bytestring_to_usize(&gfa, false).unwrap();
 
         let _ = std::fs::remove_file(diatom_name_map_path());
         name_map.save_json(diatom_name_map_path()).unwrap();
@@ -440,7 +443,8 @@ mod tests {
 
         assert_eq!(name_map, loaded_map);
 
-        let inverted_gfa = loaded_map.gfa_usize_to_bstring(&new_gfa).unwrap();
+        let inverted_gfa =
+            loaded_map.gfa_usize_to_bytestring(&new_gfa).unwrap();
 
         assert_eq!(gfa, inverted_gfa);
     }

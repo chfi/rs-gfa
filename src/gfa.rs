@@ -133,7 +133,7 @@ impl<N: SegmentId, T: OptFields> GFA<N, T> {
 /// The header line of a GFA graph
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Header<T: OptFields> {
-    pub version: Option<BString>,
+    pub version: Option<Vec<u8>>,
     pub optional: T,
 }
 
@@ -147,21 +147,21 @@ impl<T: OptFields> Default for Header<T> {
 }
 
 /// A segment in a GFA graph. Generic over the name type, but
-/// currently the parser is only defined for N = BString
+/// currently the parser is only defined for N = Vec<u8>
 #[derive(
     Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
 )]
 pub struct Segment<N, T: OptFields> {
     pub name: N,
-    pub sequence: BString,
+    pub sequence: Vec<u8>,
     pub optional: T,
 }
 
-impl<T: OptFields> Segment<BString, T> {
+impl<T: OptFields> Segment<Vec<u8>, T> {
     pub fn new(name: &[u8], sequence: &[u8]) -> Self {
         Segment {
-            name: BString::from(name),
-            sequence: BString::from(sequence),
+            name: Vec::from(name),
+            sequence: Vec::from(sequence),
             optional: Default::default(),
         }
     }
@@ -175,18 +175,18 @@ pub struct Link<N, T: OptFields> {
     pub from_orient: Orientation,
     pub to_segment: N,
     pub to_orient: Orientation,
-    pub overlap: BString,
+    pub overlap: Vec<u8>,
     pub optional: T,
 }
 
-impl<T: OptFields> Link<BString, T> {
+impl<T: OptFields> Link<Vec<u8>, T> {
     pub fn new(
         from_segment: &[u8],
         from_orient: Orientation,
         to_segment: &[u8],
         to_orient: Orientation,
         overlap: &[u8],
-    ) -> Link<BString, T> {
+    ) -> Link<Vec<u8>, T> {
         Link {
             from_segment: from_segment.into(),
             from_orient,
@@ -207,19 +207,19 @@ pub struct Containment<N, T: OptFields> {
     pub contained_name: N,
     pub contained_orient: Orientation,
     pub pos: usize,
-    pub overlap: BString,
+    pub overlap: Vec<u8>,
     pub optional: T,
 }
 
 /// The step list that the path actually consists of is an unparsed
-/// BString to keep memory down; use path.iter() to get an iterator
+/// Vec<u8> to keep memory down; use path.iter() to get an iterator
 /// over the parsed path segments and orientations.
 #[derive(
     Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
 )]
 pub struct Path<N, T: OptFields> {
-    pub path_name: BString,
-    pub segment_names: BString,
+    pub path_name: Vec<u8>,
+    pub segment_names: Vec<u8>,
     pub overlaps: Vec<Option<CIGAR>>,
     pub optional: T,
     _segment_names: std::marker::PhantomData<N>,
@@ -227,8 +227,8 @@ pub struct Path<N, T: OptFields> {
 
 impl<N: SegmentId, T: OptFields> Path<N, T> {
     pub fn new(
-        path_name: BString,
-        segment_names: BString,
+        path_name: Vec<u8>,
+        segment_names: Vec<u8>,
         overlaps: Vec<Option<CIGAR>>,
         optional: T,
     ) -> Self {
@@ -258,7 +258,7 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
     }
 }
 
-impl<T: OptFields> Path<BString, T> {
+impl<T: OptFields> Path<Vec<u8>, T> {
     /// Produces an iterator over the segments of the given path,
     /// parsing the orientation and producing a slice to each segment
     /// name
@@ -341,7 +341,7 @@ mod tests {
             .map(|bs| CIGAR::from_bytestring(&bs[..]))
             .collect();
 
-        let path: Path<BString, _> =
+        let path: Path<Vec<u8>, _> =
             Path::new("14".into(), "11+,12-,13+".into(), cigars, ());
 
         let mut path_iter = path.iter();

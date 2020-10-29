@@ -1,6 +1,6 @@
 use crate::{gfa::*, optfields::*};
 
-use bstr::BString;
+use bstr::{BString, ByteSlice, ByteVec};
 use std::fmt::{Display, Write};
 
 /// This entire module will probably be removed, with the functions
@@ -21,35 +21,40 @@ fn write_optional_fields<U: OptFields, T: Write>(opts: &U, stream: &mut T) {
 fn write_header<U: OptFields, T: Write>(header: &Header<U>, stream: &mut T) {
     write!(stream, "H").unwrap();
     if let Some(v) = &header.version {
-        write!(stream, "\tVN:Z:{}", v).unwrap();
+        write!(stream, "\tVN:Z:{}", v.as_bstr()).unwrap();
     }
     write_optional_fields(&header.optional, stream);
 }
 
 // Write segment
-fn write_segment<N: Display, T: Write, U: OptFields>(
+fn write_segment<N: SegmentId, T: Write, U: OptFields>(
     seg: &Segment<N, U>,
     stream: &mut T,
 ) {
-    write!(stream, "S\t{}\t{}", seg.name, seg.sequence)
-        .expect("Error writing segment to stream");
+    write!(
+        stream,
+        "S\t{}\t{}",
+        seg.name.display(),
+        seg.sequence.as_bstr()
+    )
+    .expect("Error writing segment to stream");
 
     write_optional_fields(&seg.optional, stream);
 }
 
 // Write link
-fn write_link<N: Display, T: Write, U: OptFields>(
+fn write_link<N: SegmentId, T: Write, U: OptFields>(
     link: &Link<N, U>,
     stream: &mut T,
 ) {
     write!(
         stream,
         "L\t{}\t{}\t{}\t{}\t{}",
-        link.from_segment,
+        link.from_segment.display(),
         link.from_orient,
-        link.to_segment,
+        link.to_segment.display(),
         link.to_orient,
-        link.overlap,
+        link.overlap.as_bstr(),
     )
     .expect("Error writing link to stream");
 
@@ -58,10 +63,10 @@ fn write_link<N: Display, T: Write, U: OptFields>(
 
 // Write path
 fn write_path<N, U: OptFields, T: Write>(path: &Path<N, U>, stream: &mut T) {
-    write!(stream, "P\t{}\t", path.path_name)
+    write!(stream, "P\t{}\t", path.path_name.as_bstr())
         .expect("Error writing path to stream");
 
-    write!(stream, "{}\t", path.segment_names).unwrap();
+    write!(stream, "{}\t", path.segment_names.as_bstr()).unwrap();
 
     path.overlaps.iter().enumerate().for_each(|(i, o)| {
         if i != 0 {
@@ -78,7 +83,7 @@ fn write_path<N, U: OptFields, T: Write>(path: &Path<N, U>, stream: &mut T) {
 }
 
 // Write GFA
-pub fn write_gfa<N: Display, T: Write, U: OptFields>(
+pub fn write_gfa<N: SegmentId, T: Write, U: OptFields>(
     gfa: &GFA<N, U>,
     stream: &mut T,
 ) {
@@ -100,7 +105,7 @@ pub fn write_gfa<N: Display, T: Write, U: OptFields>(
     });
 }
 
-pub fn gfa_string(gfa: &GFA<BString, OptionalFields>) -> String {
+pub fn gfa_string(gfa: &GFA<Vec<u8>, OptionalFields>) -> String {
     let mut result = String::new();
     write_gfa(gfa, &mut result);
     result
@@ -114,11 +119,12 @@ mod tests {
     #[test]
     fn print_segment() {
         use OptFieldVal::*;
-        let mut segment: Segment<BString, OptionalFields> =
+        let mut segment: Segment<Vec<u8>, OptionalFields> =
             Segment::new(b"seg1", b"GCCCTA");
         let opt_ij = OptField::new(b"IJ", A(b'x'));
         let opt_ab = OptField::new(b"AB", BInt(vec![1, 2, 3, 52124]));
-        let opt_ur = OptField::new(b"UR", Z(BString::from("http://test.com/")));
+        let opt_ur =
+            OptField::new(b"UR", Z(Vec::<u8>::from("http://test.com/")));
         let opt_rc = OptField::new(b"RC", Int(123));
         segment.optional = vec![opt_rc, opt_ur, opt_ij, opt_ab];
         let expected = "S\tseg1\tGCCCTA\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
@@ -129,7 +135,7 @@ mod tests {
 
     #[test]
     fn print_link() {
-        let link: Link<BString, ()> = Link::new(
+        let link: Link<Vec<u8>, ()> = Link::new(
             b"13",
             Orientation::Forward,
             b"552",
@@ -150,7 +156,7 @@ mod tests {
             .map(|bs| CIGAR::from_bytestring(&bs[..]))
             .collect();
 
-        let path: Path<BString, _> =
+        let path: Path<Vec<u8>, _> =
             Path::new("path1".into(), "13+,51-,241+".into(), cigars, ());
 
         let mut string = String::new();
@@ -164,7 +170,7 @@ mod tests {
         use std::path::PathBuf;
 
         let parser = crate::parser::GFAParser::new();
-        let in_gfa: GFA<BString, ()> =
+        let in_gfa: GFA<Vec<u8>, ()> =
             parser.parse_file(&"./test/gfas/lil.gfa").unwrap();
 
         let mut file =

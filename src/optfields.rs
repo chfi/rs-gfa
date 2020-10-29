@@ -1,4 +1,4 @@
-use bstr::{BString, ByteSlice};
+use bstr::ByteSlice;
 
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
@@ -26,8 +26,8 @@ pub enum OptFieldVal {
     A(u8),
     Int(i64),
     Float(f32),
-    Z(BString),
-    J(BString),
+    Z(Vec<u8>),
+    J(Vec<u8>),
     H(Vec<u32>),
     BInt(Vec<i64>),
     BFloat(Vec<f32>),
@@ -137,8 +137,8 @@ impl std::fmt::Display for OptField {
             A(x) => write!(f, "A:{}", char::from(*x)),
             Int(x) => write!(f, "i:{}", x),
             Float(x) => write!(f, "f:{}", x),
-            Z(x) => write!(f, "Z:{}", x),
-            J(x) => write!(f, "J:{}", x),
+            Z(x) => write!(f, "Z:{}", x.as_bstr()),
+            J(x) => write!(f, "J:{}", x.as_bstr()),
             H(x) => {
                 write!(f, "H:")?;
                 for a in x {

@@ -42,17 +42,32 @@ impl GFAParserBuilder {
         }
     }
 
-    pub fn ignore_errors(mut self) -> Self {
+    pub fn segments(&mut self, include: bool) -> &mut Self {
+        self.segments = include;
+        self
+    }
+
+    pub fn links(&mut self, include: bool) -> &mut Self {
+        self.links = include;
+        self
+    }
+
+    pub fn error_tolerance(&mut self, tol: ParserTolerance) -> &mut Self {
+        self.tolerance = tol;
+        self
+    }
+
+    pub fn ignore_errors(&mut self) -> &mut Self {
         self.tolerance = ParserTolerance::IgnoreAll;
         self
     }
 
-    pub fn ignore_safe_errors(mut self) -> Self {
+    pub fn ignore_safe_errors(&mut self) -> &mut Self {
         self.tolerance = ParserTolerance::Safe;
         self
     }
 
-    pub fn pedantic_errors(mut self) -> Self {
+    pub fn pedantic_errors(&mut self) -> &mut Self {
         self.tolerance = ParserTolerance::Pedantic;
         self
     }
@@ -73,7 +88,7 @@ impl GFAParserBuilder {
         self.build()
     }
 
-    pub fn build_bstr_id<T: OptFields>(self) -> GFAParser<BString, T> {
+    pub fn build_bstr_id<T: OptFields>(self) -> GFAParser<Vec<u8>, T> {
         self.build()
     }
 }
@@ -266,7 +281,7 @@ impl<T: OptFields> Header<T> {
     }
 }
 
-fn parse_sequence<I>(input: &mut I) -> GFAFieldResult<BString>
+fn parse_sequence<I>(input: &mut I) -> GFAFieldResult<Vec<u8>>
 where
     I: Iterator,
     I::Item: AsRef<[u8]>,
@@ -277,7 +292,7 @@ where
 
     let next = next_field(input)?;
     RE.find(next.as_ref())
-        .map(|s| BString::from(s.as_bytes()))
+        .map(|s| Vec::from(s.as_bytes()))
         .ok_or(ParseFieldError::InvalidField("Sequence"))
 }
 
@@ -385,11 +400,11 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
         I::Item: AsRef<[u8]>,
     {
         // Use the SegmentId parser for the path name as well; it's
-        // just always BString
-        let path_name = BString::parse_next(&mut input)?;
+        // just always Vec<u8>
+        let path_name = Vec::<u8>::parse_next(&mut input)?;
 
         let segment_names =
-            next_field(&mut input).map(|bs| BString::from(bs.as_ref()))?;
+            next_field(&mut input).map(|bs| Vec::<u8>::from(bs.as_ref()))?;
 
         let overlaps = next_field(&mut input)?
             .as_ref()
@@ -412,7 +427,7 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
         let overlaps = overlaps
             .as_ref()
             .split_str(b",")
-            // .map(BString::from)
+            // .map(Vec<u8>::from)
             .map(|bs| {
                 if bs == b"*" {
                     None
@@ -459,7 +474,7 @@ mod tests {
     #[test]
     fn can_parse_link() {
         let link = "11	+	12	-	4M";
-        let link_: Link<BString, ()> = Link {
+        let link_: Link<Vec<u8>, ()> = Link {
             from_segment: "11".into(),
             from_orient: Orientation::Forward,
             to_segment: "12".into(),
@@ -483,7 +498,7 @@ mod tests {
     fn can_parse_containment() {
         let cont = "1\t-\t2\t+\t110\t100M";
 
-        let cont_: Containment<BString, _> = Containment {
+        let cont_: Containment<Vec<u8>, _> = Containment {
             container_name: "1".into(),
             container_orient: Orientation::Backward,
             contained_name: "2".into(),
@@ -512,7 +527,7 @@ mod tests {
             .map(|bs| CIGAR::from_bytestring(&bs[..]))
             .collect();
 
-        let path_: Path<BString, _> =
+        let path_: Path<Vec<u8>, _> =
             Path::new("14".into(), "11+,12-,13+".into(), cigars, ());
 
         let fields = path.split_terminator('\t');
@@ -530,7 +545,7 @@ mod tests {
     #[test]
     fn can_parse_gfa_lines() {
         let parser = GFAParser::new();
-        let gfa: GFA<BString, ()> =
+        let gfa: GFA<Vec<u8>, ()> =
             parser.parse_file(&"./test/gfas/lil.gfa").unwrap();
 
         let num_segs = gfa.segments.len();
@@ -598,31 +613,31 @@ mod tests {
                 H(vec![0xA, 0xA, 0xC, 0xC, 0xF, 0xF, 0x0, 0x5]),
             ),
             OptField::new(b"RC", Int(123)),
-            OptField::new(b"UR", Z(BString::from("http://test.com/"))),
+            OptField::new(b"UR", Z(Vec::<u8>::from("http://test.com/"))),
             OptField::new(b"IJ", A(b'x')),
             OptField::new(b"AB", BInt(vec![1, 2, 3, 52124])),
         ]
         .into_iter()
         .collect();
 
-        let segment_1: GFAFieldResult<Segment<BString, ()>> =
+        let segment_1: GFAFieldResult<Segment<Vec<u8>, ()>> =
             Segment::parse_line(fields.clone());
 
         assert!(segment_1.is_ok());
         assert_eq!(
             Segment {
-                name: BString::from(name),
-                sequence: BString::from(seq),
+                name: Vec::<u8>::from(name),
+                sequence: Vec::<u8>::from(seq),
                 optional: ()
             },
             segment_1.unwrap(),
         );
 
-        let segment_2: Segment<BString, OptionalFields> =
+        let segment_2: Segment<Vec<u8>, OptionalFields> =
             Segment::parse_line(fields).unwrap();
 
-        assert_eq!(segment_2.name, name);
-        assert_eq!(segment_2.sequence, seq);
+        assert_eq!(segment_2.name.as_bstr(), name);
+        assert_eq!(segment_2.sequence.as_bstr(), seq);
         assert_eq!(segment_2.optional, optional_fields);
     }
 }

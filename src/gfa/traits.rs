@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
 /// Trait for the types that can be parsed and used as segment IDs;
-/// will probably only be usize and BString.
+/// will probably only be usize and Vec<u8>.
 pub trait SegmentId: Sized + Default {
     const ERROR: ParseFieldError;
 
@@ -19,6 +19,8 @@ pub trait SegmentId: Sized + Default {
         let next = input.next().ok_or(ParseFieldError::MissingFields)?;
         Self::parse_id(next.as_ref()).ok_or(Self::ERROR)
     }
+
+    fn display(&self) -> String;
 }
 
 impl SegmentId for usize {
@@ -27,9 +29,13 @@ impl SegmentId for usize {
     fn parse_id(input: &[u8]) -> Option<Self> {
         input.to_str().ok()?.parse::<usize>().ok()
     }
+
+    fn display(&self) -> String {
+        self.to_string()
+    }
 }
 
-impl SegmentId for BString {
+impl SegmentId for Vec<u8> {
     const ERROR: ParseFieldError = ParseFieldError::Utf8Error;
 
     fn parse_id(input: &[u8]) -> Option<Self> {
@@ -37,6 +43,10 @@ impl SegmentId for BString {
             static ref RE: Regex =
                 Regex::new(r"(?-u)[!-)+-<>-~][!-~]*").unwrap();
         }
-        RE.find(input).map(|s| BString::from(s.as_bytes()))
+        RE.find(input).map(|s| Vec::from(s.as_bytes()))
+    }
+
+    fn display(&self) -> String {
+        self.as_bstr().to_string()
     }
 }
