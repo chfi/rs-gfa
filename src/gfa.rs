@@ -8,6 +8,7 @@ pub use self::traits::*;
 use crate::{cigar::CIGAR, optfields::*};
 
 use bstr::{BStr, ByteSlice};
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 
 /// This module defines the various GFA line types, the GFA object,
@@ -148,9 +149,8 @@ impl<T: OptFields> Default for Header<T> {
 
 /// A segment in a GFA graph. Generic over the name type, but
 /// currently the parser is only defined for N = Vec<u8>
-#[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
-)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Segment<N, T: OptFields> {
     pub name: N,
     pub sequence: Vec<u8>,
@@ -167,9 +167,8 @@ impl<T: OptFields> Segment<Vec<u8>, T> {
     }
 }
 
-#[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
-)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Link<N, T: OptFields> {
     pub from_segment: N,
     pub from_orient: Orientation,
@@ -198,9 +197,8 @@ impl<T: OptFields> Link<Vec<u8>, T> {
     }
 }
 
-#[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
-)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Containment<N, T: OptFields> {
     pub container_name: N,
     pub container_orient: Orientation,
@@ -214,9 +212,8 @@ pub struct Containment<N, T: OptFields> {
 /// The step list that the path actually consists of is an unparsed
 /// Vec<u8> to keep memory down; use path.iter() to get an iterator
 /// over the parsed path segments and orientations.
-#[derive(
-    Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize, Hash,
-)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Path<N, T: OptFields> {
     pub path_name: Vec<u8>,
     pub segment_names: Vec<u8>,

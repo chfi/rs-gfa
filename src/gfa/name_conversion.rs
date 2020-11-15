@@ -12,6 +12,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 
 fn hash_gfa<T: OptFields>(gfa: &GFA<Vec<u8>, T>) -> u64 {
@@ -47,13 +48,15 @@ fn hash_gfa<T: OptFields>(gfa: &GFA<Vec<u8>, T>) -> u64 {
 
 /// This is a helper struct for handling serialization/deserialization
 /// of NameMaps to text-based formats such as ASCII
+#[cfg(feature = "serde1")]
 #[derive(Serialize, Deserialize)]
-struct NameMapString {
+pub struct NameMapString {
     pub(crate) name_map: FnvHashMap<String, usize>,
     pub(crate) inverse_map: Vec<String>,
     pub(crate) hash: u64,
 }
 
+#[cfg(feature = "serde1")]
 impl NameMapString {
     fn from_name_map(map: &NameMap) -> Self {
         let name_map: FnvHashMap<String, usize> = map
@@ -99,7 +102,8 @@ impl NameMapString {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct NameMap {
     pub(crate) name_map: FnvHashMap<Vec<u8>, usize>,
     pub(crate) inverse_map: Vec<Vec<u8>>,
@@ -109,6 +113,7 @@ pub struct NameMap {
 
 impl NameMap {
     /// Save the NameMap to a JSON file.
+    #[cfg(feature = "serde1")]
     pub fn save_json<P: AsRef<std::path::Path>>(
         &self,
         path: P,
@@ -122,6 +127,7 @@ impl NameMap {
     }
 
     /// Load a NameMap from a JSON file.
+    #[cfg(feature = "serde1")]
     pub fn load_json<P: AsRef<std::path::Path>>(
         path: P,
     ) -> std::io::Result<Self> {
@@ -419,6 +425,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde1")]
     fn lil_name_map_serde() {
         let gfa = load_lil_gfa();
         let name_map = NameMap::build_from_gfa(&gfa);
@@ -431,6 +438,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde1")]
     fn diatom_name_map_serde() {
         let gfa = load_diatom_gfa();
         let name_map = NameMap::build_from_gfa(&gfa);

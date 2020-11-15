@@ -2,22 +2,14 @@ use bytemuck::{Contiguous, Pod, Zeroable};
 
 use nom::{bytes::complete::*, IResult};
 
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 
 #[repr(u8)]
 #[derive(
-    Contiguous,
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
+    Contiguous, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub enum CIGAROp {
     M = 0,
     I = 1,
@@ -113,23 +105,14 @@ impl std::str::FromStr for CIGAROp {
     }
 }
 
+#[allow(clippy::identity_op)]
 /// A memory-efficient representation of a single CIGAR op + length, as
 /// a u32.
 #[repr(transparent)]
 #[derive(
-    Zeroable,
-    Pod,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
+    Zeroable, Pod, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct CIGARPair(u32);
 
 #[allow(clippy::len_without_is_empty)]
@@ -199,19 +182,9 @@ impl std::fmt::Display for CIGARPair {
     }
 }
 
-#[derive(
-    Debug,
-    Default,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 // pub struct CIGAR(pub Vec<(u32, CIGAROp)>);
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct CIGAR(pub Vec<CIGARPair>);
 
 impl CIGAR {

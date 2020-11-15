@@ -1,20 +1,11 @@
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 
 use crate::parser::ParseFieldError;
 
 /// Represents segment orientation/strand
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    Hash,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub enum Orientation {
     Forward,
     Backward,
