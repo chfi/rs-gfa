@@ -130,12 +130,14 @@ impl fmt::Display for ParseError {
 }
 
 impl From<std::io::Error> for ParseError {
+    #[inline]
     fn from(err: std::io::Error) -> Self {
         Self::IOError(err)
     }
 }
 
 impl From<ParseFieldError> for ParseError {
+    #[inline]
     fn from(err: ParseFieldError) -> Self {
         Self::InvalidField(err)
     }
@@ -144,13 +146,15 @@ impl From<ParseFieldError> for ParseError {
 impl error::Error for ParseError {}
 
 impl ParseError {
+    #[inline]
     pub(crate) fn invalid_line(error: ParseFieldError, line: &[u8]) -> Self {
         let mut dest = String::new();
         line.to_str_lossy_into(&mut dest);
         Self::InvalidLine(error, dest)
     }
 
-    pub(crate) fn can_safely_continue(&self, tol: &ParserTolerance) -> bool {
+    #[inline]
+    pub fn can_safely_continue(&self, tol: &ParserTolerance) -> bool {
         use ParserTolerance as Tol;
         match tol {
             Tol::IgnoreAll => true,

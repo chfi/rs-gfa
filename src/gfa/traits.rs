@@ -11,6 +11,7 @@ pub trait SegmentId: Sized + Default {
 
     fn parse_id(input: &[u8]) -> Option<Self>;
 
+    #[inline]
     fn parse_next<I>(mut input: I) -> Result<Self, ParseFieldError>
     where
         I: Iterator,
@@ -26,10 +27,12 @@ pub trait SegmentId: Sized + Default {
 impl SegmentId for usize {
     const ERROR: ParseFieldError = ParseFieldError::UintIdError;
 
+    #[inline]
     fn parse_id(input: &[u8]) -> Option<Self> {
         input.to_str().ok()?.parse::<usize>().ok()
     }
 
+    #[inline]
     fn display(&self) -> String {
         self.to_string()
     }
@@ -38,6 +41,7 @@ impl SegmentId for usize {
 impl SegmentId for Vec<u8> {
     const ERROR: ParseFieldError = ParseFieldError::Utf8Error;
 
+    #[inline]
     fn parse_id(input: &[u8]) -> Option<Self> {
         lazy_static! {
             static ref RE: Regex =
@@ -46,6 +50,7 @@ impl SegmentId for Vec<u8> {
         RE.find(input).map(|s| Vec::from(s.as_bytes()))
     }
 
+    #[inline]
     fn display(&self) -> String {
         self.as_bstr().to_string()
     }

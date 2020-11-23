@@ -61,28 +61,19 @@ impl CIGAROp {
     #[inline]
     pub fn consumes_query(&self) -> bool {
         use CIGAROp::*;
-        match self {
-            M | E | X | I | S => true,
-            _ => false,
-        }
+        matches!(self, M | E | X | I | S)
     }
 
     #[inline]
     pub fn consumes_reference(&self) -> bool {
         use CIGAROp::*;
-        match self {
-            M | E | X | D | N => true,
-            _ => false,
-        }
+        matches!(self, M | E | X | D | N)
     }
 
     #[inline]
     pub fn is_match_or_mismatch(&self) -> bool {
         use CIGAROp::*;
-        match self {
-            M | E | X => true,
-            _ => false,
-        }
+        matches!(self, M | E | X)
     }
 }
 
@@ -105,7 +96,6 @@ impl std::str::FromStr for CIGAROp {
     }
 }
 
-#[allow(clippy::identity_op)]
 /// A memory-efficient representation of a single CIGAR op + length, as
 /// a u32.
 #[repr(transparent)]
@@ -113,6 +103,7 @@ impl std::str::FromStr for CIGAROp {
     Zeroable, Pod, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
 #[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
+#[allow(clippy::identity_op)]
 pub struct CIGARPair(u32);
 
 #[allow(clippy::len_without_is_empty)]

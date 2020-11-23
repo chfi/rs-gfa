@@ -89,6 +89,7 @@ impl<N, T: OptFields> GFA<N, T> {
     /// GFA. Simply pushes it into the corresponding Vec in the GFA,
     /// or replaces the header, so there's no deduplication or sorting
     /// taking place.
+    #[inline]
     pub fn insert_line(&mut self, line: Line<N, T>) {
         use Line::*;
         match line {
@@ -158,6 +159,7 @@ pub struct Segment<N, T: OptFields> {
 }
 
 impl<T: OptFields> Segment<Vec<u8>, T> {
+    #[inline]
     pub fn new(name: &[u8], sequence: &[u8]) -> Self {
         Segment {
             name: Vec::from(name),
@@ -179,6 +181,7 @@ pub struct Link<N, T: OptFields> {
 }
 
 impl<T: OptFields> Link<Vec<u8>, T> {
+    #[inline]
     pub fn new(
         from_segment: &[u8],
         from_orient: Orientation,
@@ -223,6 +226,7 @@ pub struct Path<N, T: OptFields> {
 }
 
 impl<N: SegmentId, T: OptFields> Path<N, T> {
+    #[inline]
     pub fn new(
         path_name: Vec<u8>,
         segment_names: Vec<u8>,
@@ -241,6 +245,7 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
 
 impl<N: SegmentId, T: OptFields> Path<N, T> {
     /// Parses (and copies!) a segment ID in the path segment list
+    #[inline]
     fn parse_segment_id(input: &[u8]) -> Option<(N, Orientation)> {
         use Orientation::*;
         let last = input.len() - 1;
@@ -259,6 +264,7 @@ impl<T: OptFields> Path<Vec<u8>, T> {
     /// Produces an iterator over the segments of the given path,
     /// parsing the orientation and producing a slice to each segment
     /// name
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&'_ BStr, Orientation)> {
         self.segment_names.split_str(b",").map(Self::segment_id_ref)
     }
@@ -279,6 +285,7 @@ impl<T: OptFields> Path<Vec<u8>, T> {
 impl<T: OptFields> Path<usize, T> {
     /// Produces an iterator over the usize segments of the given
     /// path.
+    #[inline]
     pub fn iter<'a>(
         &'a self,
     ) -> impl Iterator<Item = (usize, Orientation)> + 'a {

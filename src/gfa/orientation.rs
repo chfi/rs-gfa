@@ -14,6 +14,7 @@ pub enum Orientation {
 impl Orientation {
     /// Parse an orientation from a single-element, where + is
     /// Forward, - is Backward
+    #[inline]
     pub fn from_bytes_plus_minus<T: AsRef<[u8]>>(bs: T) -> Option<Self> {
         match bs.as_ref() {
             b"+" => Some(Orientation::Forward),
@@ -22,10 +23,12 @@ impl Orientation {
         }
     }
 
+    #[inline]
     pub fn parse_error(opt: Option<Self>) -> Result<Self, ParseFieldError> {
         opt.ok_or(ParseFieldError::OrientationError)
     }
 
+    #[inline]
     pub fn write_plus_minus(
         &self,
         f: &mut std::fmt::Formatter<'_>,
@@ -37,6 +40,7 @@ impl Orientation {
         write!(f, "{}", sym)
     }
 
+    #[inline]
     pub fn plus_minus_as_byte(&self) -> u8 {
         match self {
             Self::Forward => b'+',
@@ -46,6 +50,7 @@ impl Orientation {
 
     /// Parse an orientation from a single-element bytestring, where >
     /// is Forward, < is Backward
+    #[inline]
     pub fn from_bytes_gt_ln<T: AsRef<[u8]>>(bs: T) -> Option<Self> {
         match bs.as_ref() {
             b">" => Some(Orientation::Forward),
@@ -54,6 +59,7 @@ impl Orientation {
         }
     }
 
+    #[inline]
     pub fn write_gt_ln(
         &self,
         f: &mut std::fmt::Formatter<'_>,
@@ -68,6 +74,7 @@ impl Orientation {
 
 /// Default orientation is forward
 impl Default for Orientation {
+    #[inline]
     fn default() -> Orientation {
         Orientation::Forward
     }
@@ -75,6 +82,7 @@ impl Default for Orientation {
 
 /// Forward is true, backward is false
 impl From<Orientation> for bool {
+    #[inline]
     fn from(o: Orientation) -> bool {
         match o {
             Orientation::Forward => true,
@@ -84,6 +92,7 @@ impl From<Orientation> for bool {
 }
 
 impl Orientation {
+    #[inline]
     pub fn is_reverse(&self) -> bool {
         !bool::from(*self)
     }
@@ -93,6 +102,7 @@ impl Orientation {
 impl std::str::FromStr for Orientation {
     type Err = &'static str;
 
+    #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Orientation::from_bytes_plus_minus(s.as_bytes())
             .ok_or("Could not parse orientation (was not + or -)")
