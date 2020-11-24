@@ -125,7 +125,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
     }
 
     #[inline]
-    pub fn ignore_line(&self, line_type: u8) -> bool {
+    pub fn ignore_line_type(&self, line_type: u8) -> bool {
         match line_type {
             b'H' => false,
             b'S' => !self.segments,
@@ -133,6 +133,15 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
             b'P' => !self.paths,
             b'C' => !self.containments,
             _ => true,
+        }
+    }
+
+    #[inline]
+    pub fn ignore_line(&self, line: &[u8]) -> bool {
+        if let Some(c) = line.first() {
+            self.ignore_line_type(*c)
+        } else {
+            true
         }
     }
 
@@ -158,27 +167,48 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         Ok(line)
     }
 
-    pub fn parse_lines<I>(&self, lines: I) -> GFAResult<GFA<N, T>>
+    #[inline]
+    pub fn parse_gfa_line_filtered(
+        &self,
+        bytes: &[u8],
+    ) -> GFAResult<Option<Line<N, T>>> {
+        let line: &[u8] = bytes.trim().as_ref();
+
+        if self.ignore_line(line) {
+            return Ok(None);
+        }
+
+        let mut fields = line.split_str(b"\t");
+        let hdr = fields.next().ok_or(ParseError::EmptyLine)?;
+
+        let invalid_line =
+            |e: ParseFieldError| ParseError::invalid_line(e, bytes);
+
+        let line = match hdr {
+            b"H" => Header::parse_line(fields).map(Header::wrap),
+            b"S" => Segment::parse_line(fields).map(Segment::wrap),
+            b"L" => Link::parse_line(fields).map(Link::wrap),
+            b"C" => Containment::parse_line(fields).map(Containment::wrap),
+            b"P" => Path::parse_line(fields).map(Path::wrap),
+            _ => return Err(ParseError::UnknownLineType),
+        }
+        .map_err(invalid_line)?;
+        Ok(Some(line))
+    }
+
+    pub fn parse_lines<'a, I>(&self, lines: I) -> GFAResult<GFA<N, T>>
     where
-        I: Iterator,
-        I::Item: AsRef<[u8]>,
+        I: Iterator<Item = &'a [u8]> + 'a,
     {
         let mut gfa = GFA::new();
 
         for line in lines {
-            let line = line.as_ref();
-            if let Some(c) = line.first() {
-                if !self.ignore_line(*c) {
-                    match self.parse_gfa_line(line.as_ref()) {
-                        Ok(parsed) => gfa.insert_line(parsed),
-                        Err(err)
-                            if err.can_safely_continue(&self.tolerance) =>
-                        {
-                            ()
-                        }
-                        Err(err) => return Err(err),
-                    };
-                }
+            if !self.ignore_line(line) {
+                match self.parse_gfa_line(line.as_ref()) {
+                    Ok(parsed) => gfa.insert_line(parsed),
+                    Err(err) if err.can_safely_continue(&self.tolerance) => (),
+                    Err(err) => return Err(err),
+                };
             }
         }
 
@@ -212,53 +242,29 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
     }
 }
 
-pub struct GFAParserLineIter<I, N, T>
-where
-    N: SegmentId,
-    T: OptFields,
-    I: Iterator,
-    I::Item: AsRef<[u8]>,
-{
-    parser: GFAParser<N, T>,
-    iter: I,
+#[inline]
+pub const fn type_header() -> u8 {
+    b'H'
 }
 
-impl<I, N, T> GFAParserLineIter<I, N, T>
-where
-    N: SegmentId,
-    T: OptFields,
-    I: Iterator,
-    I::Item: AsRef<[u8]>,
-{
-    pub fn from_parser(parser: GFAParser<N, T>, iter: I) -> Self {
-        Self { parser, iter }
-    }
+#[inline]
+pub const fn type_segment() -> u8 {
+    b'S'
 }
 
-impl<I, N, T> Iterator for GFAParserLineIter<I, N, T>
-where
-    N: SegmentId,
-    T: OptFields,
-    I: Iterator,
-    I::Item: AsRef<[u8]>,
-{
-    type Item = GFAResult<Line<N, T>>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        let next_line = self.iter.next()?;
-        let result = self.parser.parse_gfa_line(next_line.as_ref());
-        Some(result)
-    }
+#[inline]
+pub const fn type_link() -> u8 {
+    b'L'
 }
 
-impl<I, N, T> std::iter::FusedIterator for GFAParserLineIter<I, N, T>
-where
-    N: SegmentId,
-    T: OptFields,
-    I: Iterator,
-    I::Item: AsRef<[u8]>,
-{
+#[inline]
+pub const fn type_path() -> u8 {
+    b'P'
+}
+
+#[inline]
+pub const fn type_containment() -> u8 {
+    b'C'
 }
 
 #[inline]
@@ -600,30 +606,6 @@ mod tests {
             err,
             ParseError::InvalidLine(ParseFieldError::UintIdError, _)
         ));
-    }
-
-    #[test]
-    fn gfa_parser_line_iter() {
-        use {
-            bstr::io::BufReadExt,
-            std::{fs::File, io::BufReader},
-        };
-
-        let parser: GFAParser<usize, ()> = GFAParser::new();
-        let file = File::open(&"./test/gfas/lil.gfa").unwrap();
-        let lines = BufReader::new(file).byte_lines().map(|x| x.unwrap());
-        let parser_iter = GFAParserLineIter::from_parser(parser, lines);
-
-        let segment_names = parser_iter
-            .filter_map(|line| {
-                let line = line.ok()?;
-                let seg = line.some_segment()?;
-
-                Some(seg.name)
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(segment_names, (1..=15).into_iter().collect::<Vec<_>>());
     }
 
     #[test]
