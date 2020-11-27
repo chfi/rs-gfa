@@ -283,6 +283,7 @@ impl<T: OptFields> Path<usize, T> {
         &'a self,
     ) -> impl Iterator<Item = (usize, Orientation)> + 'a {
         self.segment_names
+            .trim_end_with(|c| c == ',')
             .split_str(b",")
             .filter_map(Self::parse_segment_id)
     }
