@@ -248,13 +248,12 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
     #[inline]
     fn parse_segment_id(input: &[u8]) -> Option<(N, Orientation)> {
         use Orientation::*;
-        let last = input.len() - 1;
-        let orient = match input[last] {
+        let orient = match input.last()? {
             b'+' => Forward,
             b'-' => Backward,
             _ => panic!("Path segment did not include orientation"),
         };
-        let seg = &input[..last];
+        let seg = &input[..input.len() - 1];
         let id = N::parse_id(seg)?;
         Some((id, orient))
     }
@@ -266,19 +265,20 @@ impl<T: OptFields> Path<Vec<u8>, T> {
     /// name
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&'_ BStr, Orientation)> {
-        self.segment_names.split_str(b",").map(Self::segment_id_ref)
+        self.segment_names
+            .split_str(b",")
+            .filter_map(Self::segment_id_ref)
     }
 
-    fn segment_id_ref(input: &[u8]) -> (&'_ BStr, Orientation) {
+    fn segment_id_ref(input: &[u8]) -> Option<(&'_ BStr, Orientation)> {
         use Orientation::*;
-        let last = input.len() - 1;
-        let orient = match input[last] {
+        let orient = match input.last()? {
             b'+' => Forward,
             b'-' => Backward,
             _ => panic!("Path segment did not include orientation"),
         };
-        let seg = &input[..last];
-        (seg.as_ref(), orient)
+        let seg = &input[..input.len() - 1];
+        Some((seg.as_ref(), orient))
     }
 }
 
