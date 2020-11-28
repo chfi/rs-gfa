@@ -1,4 +1,4 @@
-use bstr::{BString, ByteSlice};
+use bstr::ByteSlice;
 
 use std::fmt::Display;
 
@@ -11,7 +11,7 @@ use crate::{gfa::*, optfields::*};
 /// spec-compliant tab-delimited output.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GAF<T: OptFields> {
-    pub seq_name: BString,
+    pub seq_name: Vec<u8>,
     pub seq_len: usize,
     pub seq_range: (usize, usize),
     pub strand: Orientation,
@@ -29,7 +29,7 @@ impl<T: OptFields> Display for GAF<T> {
         write!(
             f,
             "{}\t{}\t{}\t{}\t{}",
-            self.seq_name,
+            self.seq_name.as_bstr(),
             self.seq_len,
             self.seq_range.0,
             self.seq_range.1,
@@ -61,8 +61,8 @@ impl<T: OptFields> Display for GAF<T> {
 /// reference.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GAFStep {
-    SegId(Orientation, BString),
-    StableIntv(Orientation, BString, usize, usize),
+    SegId(Orientation, Vec<u8>),
+    StableIntv(Orientation, Vec<u8>, usize, usize),
 }
 
 impl Display for GAFStep {
@@ -70,11 +70,11 @@ impl Display for GAFStep {
         match self {
             GAFStep::SegId(o, seg) => {
                 o.write_gt_ln(f)?;
-                write!(f, "{}", seg)
+                write!(f, "{}", seg.as_bstr())
             }
             GAFStep::StableIntv(o, id, from, to) => {
                 o.write_gt_ln(f)?;
-                write!(f, "{}:{}-{}", id, from, to)
+                write!(f, "{}:{}-{}", id.as_bstr(), from, to)
             }
         }
     }
@@ -131,7 +131,7 @@ impl GAFStep {
 // is for now.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GAFPath {
-    StableId(BString),
+    StableId(Vec<u8>),
     OrientIntv(Vec<GAFStep>),
 }
 
@@ -157,7 +157,7 @@ impl GAFPath {
 impl Display for GAFPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GAFPath::StableId(id) => write!(f, "{}", id),
+            GAFPath::StableId(id) => write!(f, "{}", id.as_bstr()),
             GAFPath::OrientIntv(steps) => {
                 for s in steps {
                     write!(f, "{}", s)?;
@@ -173,11 +173,11 @@ impl Display for GAFPath {
 /// spec-compliant tab-delimited output.
 #[derive(Debug, Clone)]
 pub struct PAF<T: OptFields> {
-    pub query_seq_name: BString,
+    pub query_seq_name: Vec<u8>,
     pub query_seq_len: usize,
     pub query_seq_range: (usize, usize),
     pub strand: Orientation,
-    pub target_seq_name: BString,
+    pub target_seq_name: Vec<u8>,
     pub target_seq_len: usize,
     pub target_seq_range: (usize, usize),
     pub residue_matches: usize,
@@ -191,7 +191,7 @@ impl<T: OptFields> Display for PAF<T> {
         write!(
             f,
             "{}\t{}\t{}\t{}\t{}",
-            self.query_seq_name,
+            self.query_seq_name.as_bstr(),
             self.query_seq_len,
             self.query_seq_range.0,
             self.query_seq_range.1,
@@ -201,7 +201,7 @@ impl<T: OptFields> Display for PAF<T> {
         write!(
             f,
             "\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-            self.target_seq_name,
+            self.target_seq_name.as_bstr(),
             self.target_seq_len,
             self.target_seq_range.0,
             self.target_seq_range.1,
@@ -229,7 +229,7 @@ where
     bytes.to_str().ok().and_then(|p| p.parse().ok())
 }
 
-fn parse_seq_fields<I>(mut input: I) -> Option<(BString, usize, (usize, usize))>
+fn parse_seq_fields<I>(mut input: I) -> Option<(Vec<u8>, usize, (usize, usize))>
 where
     I: Iterator,
     I::Item: AsRef<[u8]>,
