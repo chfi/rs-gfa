@@ -124,6 +124,47 @@ impl OptField {
     }
 }
 
+macro_rules! get_variant {
+    ($from:ident, ref $var:path) => {
+        if let $var(x) = &$from.value {
+            Some(&x)
+        } else {
+            None
+        }
+    };
+    ($from:ident, copy $var:path) => {
+        if let $var(x) = $from.value {
+            Some(x)
+        } else {
+            None
+        }
+    };
+}
+
+// Generate a function with name `$fn` for getting contents of variant
+// `$var`, returning an Option containing `$out` or `&$out`. `$op` can
+// be `ref` or `copy`: if it's `ref`, a reference to the value is
+// returned, if it's `copy`, the value is dereferenced and an owned
+// copy is returned.
+macro_rules! get_opt_field_val {
+    ($var:path, $op:tt $out:ty, $fn:ident) => {
+        pub fn $fn(&self) -> Option<$out> {
+            get_variant!(self, $op $var)
+        }
+    };
+}
+
+impl OptField {
+    get_opt_field_val!(OptFieldVal::A,      copy   u8,  get_char);
+    get_opt_field_val!(OptFieldVal::Int,    copy  i64,  get_int);
+    get_opt_field_val!(OptFieldVal::Float,  copy  f32,  get_float);
+    get_opt_field_val!(OptFieldVal::Z,      ref &[ u8], get_string);
+    get_opt_field_val!(OptFieldVal::J,      ref &[ u8], get_json);
+    get_opt_field_val!(OptFieldVal::H,      ref &[u32], get_byte_array);
+    get_opt_field_val!(OptFieldVal::BInt,   ref &[i64], get_int_array);
+    get_opt_field_val!(OptFieldVal::BFloat, ref &[f32], get_float_array);
+}
+
 /// The Display implementation produces spec-compliant strings in the
 /// <TAG>:<TYPE>:<VALUE> format, and can be parsed back using
 /// OptField::parse().
