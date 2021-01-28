@@ -99,7 +99,7 @@ impl GFAParserBuilder {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct GFAParser<N: SegmentId, T: OptFields> {
     segments: bool,
     links: bool,
