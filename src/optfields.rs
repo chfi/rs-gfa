@@ -147,7 +147,8 @@ macro_rules! get_variant {
 // returned, if it's `copy`, the value is dereferenced and an owned
 // copy is returned.
 macro_rules! get_opt_field_val {
-    ($var:path, $op:tt $out:ty, $fn:ident) => {
+    ($(#[$meta:meta])* $var:path, $op:tt $out:ty, $fn:ident) => {
+        $(#[$meta])*
         pub fn $fn(&self) -> Option<$out> {
             get_variant!(self, $op $var)
         }
@@ -155,14 +156,37 @@ macro_rules! get_opt_field_val {
 }
 
 impl OptField {
-    get_opt_field_val!(OptFieldVal::A,      copy   u8,  get_char);
-    get_opt_field_val!(OptFieldVal::Int,    copy  i64,  get_int);
-    get_opt_field_val!(OptFieldVal::Float,  copy  f32,  get_float);
-    get_opt_field_val!(OptFieldVal::Z,      ref &[ u8], get_string);
-    get_opt_field_val!(OptFieldVal::J,      ref &[ u8], get_json);
-    get_opt_field_val!(OptFieldVal::H,      ref &[u32], get_byte_array);
-    get_opt_field_val!(OptFieldVal::BInt,   ref &[i64], get_int_array);
-    get_opt_field_val!(OptFieldVal::BFloat, ref &[f32], get_float_array);
+    get_opt_field_val!(
+        /// If this field contains a single character, return it.
+        OptFieldVal::A,      copy   u8,  get_char);
+
+    get_opt_field_val!(
+        /// If this field contains a single integer, return it.
+        OptFieldVal::Int,    copy  i64,  get_int);
+
+    get_opt_field_val!(
+        /// If this field contains a single float, return it.
+        OptFieldVal::Float,  copy  f32,  get_float);
+
+    get_opt_field_val!(
+        /// If this field contains a string, return a slice of it.
+        OptFieldVal::Z,      ref &[ u8], get_string);
+
+    get_opt_field_val!(
+        /// If this field contains a JSON string, return a slice of it.
+        OptFieldVal::J,      ref &[ u8], get_json);
+
+    get_opt_field_val!(
+        /// If this field contains a byte array, return a slice of it.
+        OptFieldVal::H,      ref &[u32], get_byte_array);
+
+    get_opt_field_val!(
+        /// If this field contains an array of integers, return a slice of it.
+        OptFieldVal::BInt,   ref &[i64], get_int_array);
+
+    get_opt_field_val!(
+        /// If this field contains an array of floats, return a slice of it.
+        OptFieldVal::BFloat, ref &[f32], get_float_array);
 }
 
 /// The Display implementation produces spec-compliant strings in the
