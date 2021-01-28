@@ -89,18 +89,19 @@ pub fn write_gfa<N: SegmentId, T: Write, U: OptFields>(
 ) {
     write_header(&gfa.header, stream);
     writeln!(stream).unwrap();
+
     gfa.segments.iter().for_each(|s| {
         write_segment(s, stream);
         writeln!(stream).unwrap();
     });
 
-    gfa.paths.iter().for_each(|p| {
-        write_path(p, stream);
+    gfa.links.iter().for_each(|l| {
+        write_link(l, stream);
         writeln!(stream).unwrap();
     });
 
-    gfa.links.iter().for_each(|l| {
-        write_link(l, stream);
+    gfa.paths.iter().for_each(|p| {
+        write_path(p, stream);
         writeln!(stream).unwrap();
     });
 }
