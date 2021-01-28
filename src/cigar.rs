@@ -138,7 +138,7 @@ impl CIGARPair {
         CIGAROp::from_u8_byte(op).unwrap()
     }
 
-    pub fn into_pair(self) -> (u32, CIGAROp) {
+    pub fn into_pair(&self) -> (u32, CIGAROp) {
         let len = self.len();
         let op = self.op();
         (len, op)
@@ -147,10 +147,6 @@ impl CIGARPair {
     pub fn from_pair((len, op): (u32, CIGAROp)) -> Self {
         CIGARPair((len << 4) | (op.into_integer()) as u32)
     }
-
-    // fn bytes_as_cigar_pair(bytes: &[u8]) -> Option<&Self> {
-    //     bytemuck::try_from_bytes(bytes).ok()
-    // }
 }
 
 impl From<u32> for CIGARPair {
@@ -237,10 +233,14 @@ impl CIGAR {
         self.0.is_empty()
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = (u32, CIGAROp)> + '_ {
+        self.0.iter().map(CIGARPair::into_pair)
+    }
+
     /// Produces an iterator over the individual CIGAR operations in
     /// the string, e.g. an iterator over "3M2D" would produce [M, M,
     /// M, D, D]
-    pub fn iter(&self) -> impl Iterator<Item = CIGAROp> + '_ {
+    pub fn iter_single(&self) -> impl Iterator<Item = CIGAROp> + '_ {
         self.0.iter().copied().flat_map(|pair| {
             std::iter::repeat(pair.op()).take(pair.len() as usize)
         })
