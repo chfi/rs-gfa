@@ -1,4 +1,7 @@
-use crate::{gfa::Line, parser::GFAParser};
+use crate::{
+    gfa::{Line, Link, Path, Segment},
+    parser::GFAParser,
+};
 
 use anyhow::{bail, Result};
 
@@ -9,6 +12,7 @@ use std::io::prelude::*;
 
 use bstr::ByteSlice;
 
+#[derive(Debug)]
 pub struct MmapGFA {
     pub cursor: std::io::Cursor<Mmap>,
     pub line_buf: Vec<u8>,
@@ -29,6 +33,78 @@ pub struct LineIndices {
     pub segments: Vec<(usize, usize)>,
     pub links: Vec<usize>,
     pub paths: Vec<usize>,
+}
+
+#[derive(Debug)]
+pub struct SegmentIter<'a> {
+    mmap: &'a mut MmapGFA,
+    parser: GFAParser<usize, ()>,
+}
+
+impl<'a> Iterator for SegmentIter<'a> {
+    type Item = Segment<usize, ()>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Ok(line) = self.mmap.next_line() {
+            if let Some(b'S') = line.first() {
+                if let Some(Line::Segment(s)) =
+                    self.parser.parse_gfa_line(line).ok()
+                {
+                    return Some(s);
+                }
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct LinkIter<'a> {
+    mmap: &'a mut MmapGFA,
+    parser: GFAParser<usize, ()>,
+}
+
+impl<'a> Iterator for LinkIter<'a> {
+    type Item = Link<usize, ()>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Ok(line) = self.mmap.next_line() {
+            if let Some(b'S') = line.first() {
+                if let Some(Line::Link(s)) =
+                    self.parser.parse_gfa_line(line).ok()
+                {
+                    return Some(s);
+                }
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct PathIter<'a> {
+    mmap: &'a mut MmapGFA,
+    parser: GFAParser<usize, ()>,
+}
+
+impl<'a> Iterator for PathIter<'a> {
+    type Item = Path<usize, ()>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Ok(line) = self.mmap.next_line() {
+            if let Some(b'S') = line.first() {
+                if let Some(Line::Path(s)) =
+                    self.parser.parse_gfa_line(line).ok()
+                {
+                    return Some(s);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl MmapGFA {
@@ -52,6 +128,17 @@ impl MmapGFA {
         })
     }
 
+    pub fn reset_position(&mut self) -> u64 {
+        let cur_pos = self.cursor.position();
+        self.cursor.set_position(0);
+        cur_pos
+    }
+
+    pub fn set_position(&mut self, new_pos: u64) -> u64 {
+        let cur_pos = self.cursor.position();
+        self.cursor.set_position(new_pos);
+        cur_pos
+    }
     pub fn get_ref(&self) -> &[u8] {
         self.cursor.get_ref().as_ref()
     }
@@ -146,5 +233,29 @@ impl MmapGFA {
 
         let gfa_line = self.parser.parse_gfa_line(line)?;
         Ok(gfa_line)
+    }
+
+    pub fn iter_segments(&mut self, from_start: bool) -> SegmentIter<'_> {
+        if from_start {
+            self.cursor.set_position(0);
+        }
+        let parser = self.parser.clone();
+        SegmentIter { mmap: self, parser }
+    }
+
+    pub fn iter_links(&mut self, from_start: bool) -> LinkIter<'_> {
+        if from_start {
+            self.cursor.set_position(0);
+        }
+        let parser = self.parser.clone();
+        LinkIter { mmap: self, parser }
+    }
+
+    pub fn iter_paths(&mut self, from_start: bool) -> PathIter<'_> {
+        if from_start {
+            self.cursor.set_position(0);
+        }
+        let parser = self.parser.clone();
+        PathIter { mmap: self, parser }
     }
 }
