@@ -4,7 +4,6 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use bstr::io::*;
-use bstr::BString;
 
 use gfa::gfa::*;
 use gfa::optfields::*;
@@ -19,22 +18,22 @@ fn load_lines(path: &PathBuf) -> io::Result<Vec<Vec<u8>>> {
     Ok(result)
 }
 
-fn parse_lines<T: OptFields>(input: &[Vec<u8>]) -> GFA<BString, T> {
-    let parser: GFAParser<BString, T> = GFAParser::new();
-    parser.parse_lines(input.iter()).unwrap()
+fn parse_lines<T: OptFields>(input: &[Vec<u8>]) -> GFA<Vec<u8>, T> {
+    let parser: GFAParser<Vec<u8>, T> = GFAParser::new();
+    parser.parse_lines(input.iter().map(|v| v.as_slice())).unwrap()
 }
 
-fn parse_lines_noopt(input: &[Vec<u8>]) -> GFA<BString, ()> {
+fn parse_lines_noopt(input: &[Vec<u8>]) -> GFA<Vec<u8>, ()> {
     parse_lines(input)
 }
 
-fn parse_lines_withopt(input: &[Vec<u8>]) -> GFA<BString, OptionalFields> {
+fn parse_lines_withopt(input: &[Vec<u8>]) -> GFA<Vec<u8>, OptionalFields> {
     parse_lines(input)
 }
 
 fn parse_lines_usize<T: OptFields>(input: &[Vec<u8>]) -> GFA<usize, T> {
     let parser: GFAParser<usize, T> = GFAParser::new();
-    parser.parse_lines(input.iter()).unwrap()
+    parser.parse_lines(input.iter().map(|v| v.as_slice())).unwrap()
 }
 
 fn parse_lines_usize_noopt(input: &[Vec<u8>]) -> GFA<usize, ()> {
