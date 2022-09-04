@@ -2,7 +2,7 @@ pub mod error;
 
 pub use self::error::{GFAFieldResult, GFAResult, ParseError, ParseFieldError};
 
-use bstr::{BStr, ByteSlice};
+use bstr::ByteSlice;
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 
@@ -147,7 +147,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
 
     #[inline]
     pub fn parse_gfa_line(&self, bytes: &[u8]) -> GFAResult<Line<N, T>> {
-        let line: &BStr = bytes.trim().as_ref();
+        let line: &[u8] = bytes.trim_with(|c| c.is_ascii_whitespace());
 
         let mut fields = line.split_str(b"\t");
         let hdr = fields.next().ok_or(ParseError::EmptyLine)?;
@@ -172,7 +172,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
         &self,
         bytes: &[u8],
     ) -> GFAResult<Option<Line<N, T>>> {
-        let line: &[u8] = bytes.trim().as_ref();
+        let line: &[u8] = bytes.trim_with(|c| c.is_ascii_whitespace());
 
         if self.ignore_line(line) {
             return Ok(None);
