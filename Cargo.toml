@@ -1,6 +1,6 @@
 [package]
 name = "gfa"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["christian@chfi.se"]
 edition = "2018"
 license = "MIT"
@@ -15,7 +15,7 @@ serde1 = ["serde", "serde_json", "bstr/serde1"]
 
 [dependencies]
 lazy_static = "1.4.0"
-regex = "1"
+regex = "1.5.5"
 nom = "5"
 bytemuck = { version = "1.4", features = ["derive"] }
 fnv = "1.0"
