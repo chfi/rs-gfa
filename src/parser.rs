@@ -17,6 +17,7 @@ pub struct GFAParserBuilder {
     pub links: bool,
     pub containments: bool,
     pub paths: bool,
+    pub walks: bool,
     pub tolerance: ParserTolerance,
 }
 
@@ -28,6 +29,7 @@ impl GFAParserBuilder {
             links: false,
             containments: false,
             paths: false,
+            walks: false,
             tolerance: Default::default(),
         }
     }
@@ -39,6 +41,7 @@ impl GFAParserBuilder {
             links: true,
             containments: true,
             paths: true,
+            walks: true,
             tolerance: Default::default(),
         }
     }
@@ -55,6 +58,11 @@ impl GFAParserBuilder {
 
     pub fn paths(&mut self, include: bool) -> &mut Self {
         self.paths = include;
+        self
+    }
+
+    pub fn walks(&mut self, include: bool) -> &mut Self {
+        self.walks = include;
         self
     }
 
@@ -84,6 +92,7 @@ impl GFAParserBuilder {
             links: self.links,
             containments: self.containments,
             paths: self.paths,
+            walks: self.walks,
             tolerance: self.tolerance,
             _optional_fields: std::marker::PhantomData,
             _segment_names: std::marker::PhantomData,
@@ -105,6 +114,7 @@ pub struct GFAParser<N: SegmentId, T: OptFields> {
     links: bool,
     containments: bool,
     paths: bool,
+    walks: bool,
     tolerance: ParserTolerance,
     _optional_fields: std::marker::PhantomData<T>,
     _segment_names: std::marker::PhantomData<N>,
@@ -132,6 +142,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
             b'L' => !self.links,
             b'P' => !self.paths,
             b'C' => !self.containments,
+            b'W' => !self.walks,
             _ => true,
         }
     }
@@ -161,6 +172,7 @@ impl<N: SegmentId, T: OptFields> GFAParser<N, T> {
             b"L" => Link::parse_line(fields).map(Link::wrap),
             b"C" => Containment::parse_line(fields).map(Containment::wrap),
             b"P" => Path::parse_line(fields).map(Path::wrap),
+            b"W" => Walk::parse_line(fields).map(Walk::wrap),
             _ => return Err(ParseError::UnknownLineType),
         }
         .map_err(invalid_line)?;
@@ -482,6 +494,101 @@ impl<N: SegmentId, T: OptFields> Path<N, T> {
     }
 }
 
+impl<N: SegmentId, T: OptFields> Walk<N, T> {
+    #[inline]
+    fn wrap(self) -> Line<N, T> {
+        Line::Walk(self)
+    }
+
+    #[inline]
+    fn parse_line<I>(mut input: I) -> GFAFieldResult<Self>
+    where
+        I: Iterator,
+        I::Item: AsRef<[u8]>,
+    {
+        let sample_id = Vec::<u8>::parse_next(&mut input)?;
+        let hap_index = next_field(&mut input)?;
+        let hap_index = hap_index.as_ref().to_str()?.parse()?;
+        let seq_id = Vec::<u8>::parse_next(&mut input)?;
+
+        let seq_start = next_field(&mut input)?;
+        let seq_start = if seq_start.as_ref() == b"*" {
+            None
+        } else {
+            Some(seq_start.as_ref().to_str()?.parse()?)
+        };
+
+        let seq_end = next_field(&mut input)?;
+        let seq_end = if seq_end.as_ref() == b"*" {
+            None
+        } else {
+            Some(seq_end.as_ref().to_str()?.parse()?)
+        };
+
+        let walk_str = next_field(&mut input)?;
+        let segment_path = Self::parse_walk_path(walk_str.as_ref())?;
+        let optional = T::parse(input);
+
+        Ok(Walk {
+            sample_id,
+            hap_index,
+            seq_id,
+            seq_start,
+            seq_end,
+            segment_path,
+            optional,
+        })
+    }
+
+    // aux function to parse the walk path
+    fn parse_walk_path(
+        walk_str: &[u8],
+    ) -> GFAFieldResult<Vec<(N, Orientation)>> {
+        if walk_str.is_empty() {
+            return Err(ParseFieldError::InvalidField("Empty walk path"));
+        }
+
+        let mut result = Vec::new();
+        let mut i = 0;
+
+        while i < walk_str.len() {
+            let orient = match walk_str[i] {
+                b'>' => Orientation::Forward,
+                b'<' => Orientation::Backward,
+                _ => {
+                    return Err(ParseFieldError::InvalidField(
+                        "Invalid walk orientation",
+                    ))
+                }
+            };
+            i += 1;
+
+            // get the segment name
+            let start = i;
+            while i < walk_str.len()
+                && walk_str[i] != b'>'
+                && walk_str[i] != b'<'
+            {
+                i += 1;
+            }
+
+            if start == i {
+                return Err(ParseFieldError::InvalidField(
+                    "Empty segment name in walk",
+                ));
+            }
+
+            let segment = N::parse_id(&walk_str[start..i]).ok_or(
+                ParseFieldError::InvalidField("Invalid segment ID in walk"),
+            )?;
+
+            result.push((segment, orient));
+        }
+
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,6 +632,36 @@ mod tests {
                 panic!("Error parsing link");
             }
             Ok(l) => assert_eq!(l, link_),
+        }
+    }
+
+    #[test]
+    fn can_parse_walk() {
+        let walk = "sample1	1	11	100	200	>11<12<13<14<15";
+        let walk_: Walk<Vec<u8>, ()> = Walk {
+            sample_id: "sample1".into(),
+            hap_index: 1,
+            seq_id: "11".into(),
+            seq_start: Some(100),
+            seq_end: Some(200),
+            segment_path: vec![
+                ("11".into(), Orientation::Forward),
+                ("12".into(), Orientation::Backward),
+                ("13".into(), Orientation::Backward),
+                ("14".into(), Orientation::Backward),
+                ("15".into(), Orientation::Backward),
+            ],
+            optional: (),
+        };
+
+        let fields = walk.split_terminator('\t');
+        let result = Walk::parse_line(fields);
+
+        match result {
+            Err(_) => {
+                panic!("Error parsing walk");
+            }
+            Ok(w) => assert_eq!(w, walk_),
         }
     }
 
@@ -591,6 +728,20 @@ mod tests {
         assert_eq!(num_links, 20);
         assert_eq!(num_conts, 0);
         assert_eq!(num_paths, 3);
+    }
+
+    #[test]
+    fn can_parse_gfa_with_w_lines() {
+        let parser = GFAParser::new();
+        let gfa: GFA<Vec<u8>, ()> =
+            parser.parse_file(&"./test/gfas/walks.gfa").unwrap();
+
+        let num_walks = gfa.walks.len();
+        let path_len = gfa.walks[0].segment_path.len();
+        eprintln!("{:?}", gfa);
+
+        assert_eq!(num_walks, 1);
+        assert_eq!(path_len, 3);
     }
 
     #[test]

@@ -35,6 +35,7 @@ pub struct GFA<N, T: OptFields> {
     pub links: Vec<Link<N, T>>,
     pub containments: Vec<Containment<N, T>>,
     pub paths: Vec<Path<N, T>>,
+    pub walks: Vec<Walk<N, T>>,
 }
 
 impl<N: SegmentId, T: OptFields> Display for GFA<N, T> {
@@ -72,6 +73,13 @@ impl<N: SegmentId, T: OptFields> Display for GFA<N, T> {
             ));
         }
 
+        for walk in self.walks.iter() {
+            write!(f, "{}\n", walk).expect(&format!(
+                "Error writing walk {} to GFA stream",
+                walk.sample_id.display()
+            ));
+        }
+
         Ok(())
     }
 }
@@ -84,6 +92,7 @@ pub enum Line<N, T: OptFields> {
     Link(Link<N, T>),
     Containment(Containment<N, T>),
     Path(Path<N, T>),
+    Walk(Walk<N, T>),
 }
 
 macro_rules! some_line_fn {
@@ -105,6 +114,7 @@ some_line_fn!(some_segment, Segment<N, T>, Line::Segment);
 some_line_fn!(some_link, Link<N, T>, Line::Link);
 some_line_fn!(some_containment, Containment<N, T>, Line::Containment);
 some_line_fn!(some_path, Path<N, T>, Line::Path);
+some_line_fn!(some_walk, Walk<N, T>, Line::Walk);
 
 macro_rules! some_line_ref_fn {
     ($name:ident, $tgt:ty, $variant:path) => {
@@ -125,6 +135,7 @@ some_line_ref_fn!(some_segment, Segment<N, T>, LineRef::Segment);
 some_line_ref_fn!(some_link, Link<N, T>, LineRef::Link);
 some_line_ref_fn!(some_containment, Containment<N, T>, LineRef::Containment);
 some_line_ref_fn!(some_path, Path<N, T>, LineRef::Path);
+some_line_ref_fn!(some_walk, Walk<N, T>, LineRef::Walk);
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum LineRef<'a, N, T: OptFields> {
@@ -133,6 +144,7 @@ pub enum LineRef<'a, N, T: OptFields> {
     Link(&'a Link<N, T>),
     Containment(&'a Containment<N, T>),
     Path(&'a Path<N, T>),
+    Walk(&'a Walk<N, T>),
 }
 
 impl<N, T: OptFields> GFA<N, T> {
@@ -149,6 +161,7 @@ impl<N, T: OptFields> GFA<N, T> {
             Link(s) => self.links.push(s),
             Containment(s) => self.containments.push(s),
             Path(s) => self.paths.push(s),
+            Walk(s) => self.walks.push(s),
         }
     }
 
@@ -161,8 +174,9 @@ impl<N, T: OptFields> GFA<N, T> {
         let links = self.links.into_iter().map(Link);
         let conts = self.containments.into_iter().map(Containment);
         let paths = self.paths.into_iter().map(Path);
+        let walks = self.walks.into_iter().map(Walk);
 
-        segs.chain(links).chain(conts).chain(paths)
+        segs.chain(links).chain(conts).chain(paths).chain(walks)
     }
 
     /// Return an iterator over references to the lines in the GFA
@@ -172,8 +186,9 @@ impl<N, T: OptFields> GFA<N, T> {
         let links = self.links.iter().map(Link);
         let conts = self.containments.iter().map(Containment);
         let paths = self.paths.iter().map(Path);
+        let walks = self.walks.iter().map(Walk);
 
-        segs.chain(links).chain(conts).chain(paths)
+        segs.chain(links).chain(conts).chain(paths).chain(walks)
     }
 }
 
@@ -425,6 +440,77 @@ impl<T: OptFields> Path<usize, T> {
     }
 }
 
+/// Walks
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
+pub struct Walk<N, T: OptFields> {
+    pub sample_id: Vec<u8>,
+    pub hap_index: usize,
+    pub seq_id: Vec<u8>,
+    pub seq_start: Option<usize>,
+    pub seq_end: Option<usize>,
+    pub segment_path: Vec<(N, Orientation)>,
+    pub optional: T,
+}
+
+impl<T: OptFields> Walk<Vec<u8>, T> {
+    #[inline]
+    pub fn new(
+        sample_id: Vec<u8>,
+        hap_index: usize,
+        seq_id: Vec<u8>,
+        seq_start: Option<usize>,
+        seq_end: Option<usize>,
+        segment_path: Vec<(Vec<u8>, Orientation)>,
+        optional: T,
+    ) -> Self {
+        Walk {
+            sample_id,
+            hap_index,
+            seq_id,
+            seq_start,
+            seq_end,
+            segment_path,
+            optional,
+        }
+    }
+}
+
+impl<N: SegmentId, T: OptFields> Display for Walk<N, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "W\t{}\t{}\t{}\t",
+            self.sample_id.as_bstr(),
+            self.hap_index,
+            self.seq_id.as_bstr()
+        )?;
+
+        match self.seq_start {
+            Some(start) => write!(f, "{}", start)?,
+            None => write!(f, "*")?,
+        }
+        write!(f, "\t")?;
+
+        match self.seq_end {
+            Some(end) => write!(f, "{}", end)?,
+            None => write!(f, "*")?,
+        }
+        write!(f, "\t")?;
+
+        for (segment, orient) in self.segment_path.iter() {
+            let orient_char = match orient {
+                Orientation::Forward => '>',
+                Orientation::Backward => '<',
+            };
+            write!(f, "{}{}", orient_char, segment.display())?;
+        }
+
+        write_optional_fields(&self.optional, f);
+        Ok(())
+    }
+}
+
 impl<N, T: OptFields> Segment<N, T> {
     pub(crate) fn nameless_clone<M: Default>(&self) -> Segment<M, T> {
         Segment {
@@ -553,6 +639,40 @@ mod tests {
     }
 
     #[test]
+    fn write_walk_to_string_buffer() {
+        use OptFieldVal::*;
+
+        let mut walk: Walk<Vec<u8>, OptionalFields> = Walk::new(
+            b"sample1".to_vec(),
+            1,
+            b"chr1".to_vec(),
+            Some(10),
+            Some(100),
+            vec![
+                (b"seg1".to_vec(), Orientation::Forward),
+                (b"seg2".to_vec(), Orientation::Backward),
+                (b"seg3".to_vec(), Orientation::Forward),
+            ],
+            vec![],
+        );
+
+        let opt_rc = OptField::new(b"RC", Int(123));
+        let opt_ij = OptField::new(b"IJ", A(b'x'));
+        let opt_ab = OptField::new(b"AB", BInt(vec![1, 2, 3, 52124]));
+        let opt_ur =
+            OptField::new(b"UR", Z(Vec::<u8>::from("http://test.com/")));
+        walk.optional = vec![opt_rc, opt_ur, opt_ij, opt_ab];
+
+        let expected = "W\tsample1\t1\tchr1\t10\t100\t>seg1<seg2>seg3\tRC:i:123\tUR:Z:http://test.com/\tIJ:A:x\tAB:B:I1,2,3,52124";
+
+        let mut string = String::new();
+        write!(&mut string, "{}", walk)
+            .expect("Error writing to string buffer");
+
+        assert_eq!(string, expected);
+    }
+
+    #[test]
     fn write_gfa_to_string_buffer() {
         use std::io::Read;
         use std::path::PathBuf;
@@ -655,6 +775,41 @@ mod tests {
             .expect("Error parsing file");
 
         assert_eq!(string, "P\tpath1\t13+,51-,241+\t8M,1M,3M");
+    }
+
+    #[test]
+    fn write_walk_to_file_buffer() {
+        let walk: Walk<Vec<u8>, ()> = Walk::new(
+            b"sample1".to_vec(),
+            1,
+            b"chr1".to_vec(),
+            Some(10),
+            Some(100),
+            vec![
+                (b"seg1".to_vec(), Orientation::Forward),
+                (b"seg2".to_vec(), Orientation::Backward),
+            ],
+            (),
+        );
+
+        let expected = "W\tsample1\t1\tchr1\t10\t100\t>seg1<seg2";
+
+        let mut tempfile =
+            NamedTempFile::new().expect("Error creating temp file");
+
+        tempfile
+            .write_all(format!("{}", walk).as_bytes())
+            .expect("Error writing to file buffer");
+
+        let mut tempfile_reader =
+            tempfile.reopen().expect("error re-opening temp file.");
+
+        let mut string = String::new();
+        tempfile_reader
+            .read_to_string(&mut string)
+            .expect("Error parsing file");
+
+        assert_eq!(string, expected);
     }
 
     #[test]

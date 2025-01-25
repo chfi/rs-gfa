@@ -1,5 +1,5 @@
 use crate::{
-    gfa::{Containment, Link, Path, Segment, GFA},
+    gfa::{Containment, Link, Path, Segment, Walk, GFA},
     optfields::*,
 };
 
@@ -41,6 +41,15 @@ fn hash_gfa<T: OptFields>(gfa: &GFA<Vec<u8>, T>) -> u64 {
     for path in gfa.paths.iter() {
         path.path_name.hash(&mut hasher);
         path.segment_names.hash(&mut hasher);
+    }
+
+    for walk in gfa.walks.iter() {
+        walk.sample_id.hash(&mut hasher);
+        walk.hap_index.hash(&mut hasher);
+        walk.seq_id.hash(&mut hasher);
+        walk.seq_start.hash(&mut hasher);
+        walk.seq_end.hash(&mut hasher);
+        walk.segment_path.hash(&mut hasher);
     }
 
     hasher.finish()
@@ -136,6 +145,72 @@ impl NameMap {
         let reader = BufReader::new(file);
         let name_map: NameMapString = serde_json::from_reader(reader)?;
         Ok(name_map.into_name_map())
+    }
+
+    fn map_walk_segments<T: OptFields>(
+        &self,
+        walk: &Walk<Vec<u8>, T>,
+    ) -> Option<Walk<usize, T>> {
+        let mut misses = 0;
+        let new_segments = walk
+            .segment_path
+            .iter()
+            .filter_map(|(seg, orient)| {
+                let n = self.map_name(seg).map(|s| (s, *orient));
+                if n.is_none() {
+                    misses += 1;
+                }
+                n
+            })
+            .collect();
+
+        if misses > 0 {
+            return None;
+        }
+
+        Some(Walk {
+            sample_id: walk.sample_id.clone(),
+            hap_index: walk.hap_index,
+            seq_id: walk.seq_id.clone(),
+            seq_start: walk.seq_start,
+            seq_end: walk.seq_end,
+            segment_path: new_segments,
+            optional: walk.optional.clone(),
+        })
+    }
+
+    fn inverse_map_walk_segments<T: OptFields>(
+        &self,
+        walk: &Walk<usize, T>,
+    ) -> Option<Walk<Vec<u8>, T>> {
+        let mut misses = 0;
+        let new_segments = walk
+            .segment_path
+            .iter()
+            .filter_map(|(seg, orient)| {
+                let n = self
+                    .inverse_map_name(*seg)
+                    .map(|s| (Vec::from(s), *orient));
+                if n.is_none() {
+                    misses += 1;
+                }
+                n
+            })
+            .collect();
+
+        if misses > 0 {
+            return None;
+        }
+
+        Some(Walk {
+            sample_id: walk.sample_id.clone(),
+            hap_index: walk.hap_index,
+            seq_id: walk.seq_id.clone(),
+            seq_start: walk.seq_start,
+            seq_end: walk.seq_end,
+            segment_path: new_segments,
+            optional: walk.optional.clone(),
+        })
     }
 
     pub fn map_name<N: AsRef<[u8]>>(&self, name: N) -> Option<usize> {
@@ -237,6 +312,7 @@ impl NameMap {
         let mut links = Vec::with_capacity(gfa.links.len());
         let mut containments = Vec::with_capacity(gfa.containments.len());
         let mut paths = Vec::with_capacity(gfa.paths.len());
+        let mut walks = Vec::with_capacity(gfa.walks.len());
 
         for seg in gfa.segments.iter() {
             let name = self.map_name(&seg.name)?;
@@ -268,12 +344,18 @@ impl NameMap {
             paths.push(new_path);
         }
 
+        for walk in gfa.walks.iter() {
+            let new_walk = self.map_walk_segments(walk)?;
+            walks.push(new_walk);
+        }
+
         Some(GFA {
             header: gfa.header.clone(),
             segments,
             links,
             containments,
             paths,
+            walks,
         })
     }
 
@@ -285,6 +367,7 @@ impl NameMap {
         let mut links = Vec::with_capacity(gfa.links.len());
         let mut containments = Vec::with_capacity(gfa.containments.len());
         let mut paths = Vec::with_capacity(gfa.paths.len());
+        let mut walks = Vec::with_capacity(gfa.walks.len());
 
         for seg in gfa.segments.iter() {
             let name = self.inverse_map_name(seg.name)?;
@@ -317,12 +400,18 @@ impl NameMap {
             paths.push(new_path);
         }
 
+        for walk in gfa.walks.iter() {
+            let new_walk = self.inverse_map_walk_segments(walk)?;
+            walks.push(new_walk);
+        }
+
         Some(GFA {
             header: gfa.header.clone(),
             segments,
             links,
             containments,
             paths,
+            walks,
         })
     }
 
@@ -354,6 +443,12 @@ impl NameMap {
         for cont in gfa.containments.iter() {
             get_ix(cont.container_name.as_ref());
             get_ix(cont.contained_name.as_ref());
+        }
+
+        for walk in gfa.walks.iter() {
+            for (seg, _) in walk.segment_path.iter() {
+                get_ix(seg.as_ref());
+            }
         }
 
         NameMap {

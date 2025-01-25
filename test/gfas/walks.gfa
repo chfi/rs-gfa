@@ -1,0 +1,8 @@
+H	VN:Z:1.1
+S	s11	ACCTT
+S	s12	TC
+S	s13	GATT
+L	s11	+	s12	-	0M
+L	s12	-	s13	+	0M
+L	s11	+	s13	+	0M
+W	NA12878	1	chr1	0	11	>s11<s12>s13
